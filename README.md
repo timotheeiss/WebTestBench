@@ -159,6 +159,38 @@ bash scripts/run_webtester_cc_parallel.sh
 bash scripts/run_scoring.sh
 ```
 
+#### Single-app test (this fork)
+
+Run the testing pipeline on just one app (`WebTestBench_0001`) using the single-record dataset, after setting the API/model env vars above:
+
+```bash
+python eval/run_agent.py --agent claude_code \
+  --data_jsonl_path ./data/WebTestBench/WebTestBench_single.jsonl \
+  --project_root ./data/WebTestBench/web_applications \
+  --output_root ./outputs --log_root ./logs/eval \
+  --version "claudecode-${MODEL##*/}" --base_port 6000 \
+  --api_base_url "$API_BASE_URL" --api_key "$API_KEY" --model "$MODEL"
+```
+
+Gold mode (defect detection only — tests against the gold checklist, no checklist generation):
+
+```bash
+python eval/run_agent.py --agent claude_code_gold \
+  --data_jsonl_path ./data/WebTestBench/WebTestBench_single.jsonl \
+  --project_root ./data/WebTestBench/web_applications \
+  --output_root ./outputs --log_root ./logs/eval \
+  --version "claudecode-${MODEL##*/}-gold" --base_port 6000 \
+  --api_base_url "$API_BASE_URL" --api_key "$API_KEY" --model "$MODEL"
+```
+
+Score a gold run with the oracle scorer (deterministic id alignment, no judge model):
+
+```bash
+python eval/scoring_oracle.py \
+  --dataset_path ./data/WebTestBench/WebTestBench.jsonl \
+  --output_root ./outputs --version "claudecode-${MODEL##*/}-gold"
+```
+
 
 ## 🙇 Acknowledgments
 
