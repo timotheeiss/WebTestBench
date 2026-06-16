@@ -2,9 +2,12 @@
 set -euo pipefail
 set -x
 # ======================================================================
-API_BASE_URL=XXX  # e.g., https://openrouter.ai/api
-API_KEY=XXX       # e.g., sk-or-v1-XXX
-MODEL=XXX         # e.g., z-ai/glm-5
+# Load variables from .env if present (API_KEY, MODEL, API_MODEL, ...)
+[ -f .env ] && set -a && . ./.env && set +a
+# ======================================================================
+API_BASE_URL=https://openrouter.ai/api  # e.g., https://openrouter.ai/api
+API_KEY=${API_KEY:?API_KEY is required (e.g., sk-or-v1-XXX)}
+MODEL=${MODEL:-openai/gpt-5.4}         # e.g., z-ai/glm-5
 VERSION=claudecode-${MODEL##*/}
 # ======================================================================
 export ANTHROPIC_DEFAULT_SONNET_MODEL=$MODEL
