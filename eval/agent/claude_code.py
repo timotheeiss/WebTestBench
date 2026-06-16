@@ -412,9 +412,8 @@ class ClaudeCodeWebTester(BaseAgent):
                     "type": "stdio",
                     "command": "npx",
                     "args": [
-                        "-y", "@playwright/mcp@0.0.61", 
+                        "-y", "@playwright/mcp@0.0.76",
                         "--isolated",
-                        "--headless",
                         "--viewport-size", "1280,720",
                     ]
                 }

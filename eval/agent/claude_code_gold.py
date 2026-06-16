@@ -163,7 +163,7 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
         self._write_stage_success(stage, True)
         self._mark_stage(stage=stage, status="running", message="🚀 Defect Detection ...")
         checklist_md = self._load_file_content(self.checklist_path)
-        prompt = USER_PROMPT["test_based_gold"].substitute(
+        prompt = USER_PROMPT["defect_detection_based_gold"].substitute(
             instruction=self.instruction, server_url=self.server_url, checklist=checklist_md,
         )
         options = self._get_browser_agent_options(max_turns=100)
@@ -432,9 +432,8 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
                     "type": "stdio",
                     "command": "npx",
                     "args": [
-                        "-y", "@playwright/mcp@0.0.61", 
+                        "-y", "@playwright/mcp@0.0.76",
                         "--isolated",
-                        "--headless",
                         "--viewport-size", "1280,720",
                     ]
                 }
