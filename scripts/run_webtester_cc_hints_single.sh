@@ -18,7 +18,12 @@ API_KEY=${API_KEY:?API_KEY is required (set it in .env)}
 # Use Sonnet 4.6 as the LLM (OpenRouter slug). For the direct Anthropic API,
 # set API_BASE_URL=https://api.anthropic.com and MODEL=claude-sonnet-4-6.
 MODEL=anthropic/claude-sonnet-4-6
-VERSION=claudecode-${MODEL##*/}-gold-hints
+# Each run gets its own version so outputs/, logs/ and session_meta.json are kept
+# separately (nothing is overwritten) and the harness never skips a "done" record.
+# Override with a meaningful label to compare runs, e.g.
+#   RUN_TAG=with-option-hints bash scripts/run_webtester_cc_hints_single.sh
+RUN_TAG=${RUN_TAG:-$(date +%Y%m%d-%H%M%S)}
+VERSION=claudecode-${MODEL##*/}-gold-hints-${RUN_TAG}
 # ======================================================================
 export ANTHROPIC_DEFAULT_SONNET_MODEL=$MODEL
 export ANTHROPIC_DEFAULT_OPUS_MODEL=$MODEL
@@ -49,6 +54,10 @@ fi
 # Prefer the project venv if present.
 PYTHON=python
 [ -x .venv/bin/python ] && PYTHON=.venv/bin/python
+
+echo "▶️  Run version: $VERSION"
+echo "   outputs -> $OUTPUT_ROOT/$VERSION/WebTestBench_0001/"
+echo "   logs    -> $LOG_ROOT/$VERSION/WebTestBench_0001/"
 
 "$PYTHON" eval/run_agent.py \
     --agent claude_code_gold_hints \
