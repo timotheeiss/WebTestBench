@@ -6,6 +6,7 @@ from .base_agent import APIConfig, BaseAgent
 AVAILABLE_AGENTS = {
     "claude_code": ("claude_code", "ClaudeCodeWebTester"),
     "claude_code_gold": ("claude_code_gold", "ClaudeCodeWebTester_Gold"),
+    "claude_code_gold_hints": ("claude_code_gold_hints", "ClaudeCodeWebTester_GoldHints"),
 }
 
 AGENT_REGISTRY = {}
