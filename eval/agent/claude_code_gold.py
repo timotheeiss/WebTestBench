@@ -178,13 +178,34 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
             max_turns=self.defect_max_turns,
         )
         options = self._get_browser_agent_options(max_turns=self.defect_max_turns)
+        # Capture the claude CLI's stderr so a non-zero exit yields a real reason
+        # instead of the SDK's opaque "Check stderr output for details".
+        self._defect_stderr_lines = []
+        options.stderr = self._record_defect_stderr
 
-        async for message in query(prompt=prompt, options=options):
-            self._log_session_id(message, session_name=stage, stage=stage, prompt=prompt)
-            self._handle_message(message, stage=stage)
-            if isinstance(message, ResultMessage):
-                result_message = message.result
-                num_turns = message.num_turns
+        # Defaults so the post-loop logic is safe even if no ResultMessage arrives.
+        result_message = ""
+        num_turns = 0
+        try:
+            async for message in query(prompt=prompt, options=options):
+                self._log_session_id(message, session_name=stage, stage=stage, prompt=prompt)
+                self._handle_message(message, stage=stage)
+                if isinstance(message, ResultMessage):
+                    result_message = message.result
+                    num_turns = message.num_turns
+        except Exception as exc:
+            # The CLI can exit non-zero AFTER emitting a (possibly max-turns)
+            # ResultMessage — e.g. when the turn budget is exhausted. Don't throw
+            # away work we already received: log the real error, then fall through
+            # to salvage whatever result / recent assistant text we captured.
+            self._report_query_failure(stage=stage, exc=exc)
+            if not result_message and not self.recent_assistant_text_blocks.get(stage):
+                self._mark_stage(
+                    stage=stage, status="error",
+                    message=f"Stage {stage} failed before producing any result: {exc}",
+                )
+                return False
+            print_orange(f"↩️ Salvaging result captured before the failure (num_turns={num_turns}).")
 
         if num_turns > self.max_turns:
             self.write_markdown(target_file, "")
@@ -209,6 +230,50 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
     # ------------------------------------------------------------------ #
     # Conversation Helpers
     # ------------------------------------------------------------------ #
+
+    def _record_defect_stderr(self, line: str) -> None:
+        """SDK stderr callback: accumulate the claude CLI's stderr lines."""
+        lines = getattr(self, "_defect_stderr_lines", None)
+        if lines is None:
+            lines = []
+            self._defect_stderr_lines = lines
+        lines.append(line)
+
+    def _report_query_failure(self, stage: str, exc: Exception) -> None:
+        """Surface and persist the real reason a query subprocess failed."""
+        captured = "\n".join(getattr(self, "_defect_stderr_lines", []) or []).strip()
+        print_red(f"⚠️ Agent query raised during {stage}: {exc}")
+        if captured:
+            print_red("---- claude CLI stderr (tail) ----")
+            print_red(captured[-4000:])
+            print_red("---- end claude CLI stderr ----")
+            try:
+                stderr_path = self.output_dir / "defect_cli_stderr.log"
+                stderr_path.write_text(captured, encoding="utf-8")
+                print_red(f"Full CLI stderr written to {stderr_path}")
+            except Exception as write_exc:
+                print_red(f"Failed to persist CLI stderr: {write_exc}")
+        else:
+            print_red("(no stderr captured from the claude CLI)")
+
+        # Persist a marker in session_meta for later inspection.
+        try:
+            session_meta: Dict[str, Any] = {}
+            if self.session_meta_path.exists():
+                session_meta = json.loads(self.session_meta_path.read_text(encoding="utf-8"))
+            if not isinstance(session_meta, dict):
+                session_meta = {}
+            stage_entry = session_meta.get(stage)
+            if not isinstance(stage_entry, dict):
+                stage_entry = {}
+            stage_entry["query_error"] = str(exc)
+            stage_entry["query_error_stderr_tail"] = captured[-2000:]
+            session_meta[stage] = stage_entry
+            self.session_meta_path.write_text(
+                json.dumps(session_meta, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+        except Exception as meta_exc:
+            print_red(f"Failed to record query error in session meta: {meta_exc}")
 
     def _log_session_id(self, message, session_name: str, stage: str, prompt: str, extra_meta: Optional[Dict] = None):
         if hasattr(message, "subtype") and message.subtype == "init":
