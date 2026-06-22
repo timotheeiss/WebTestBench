@@ -43,7 +43,14 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
         self.recent_assistant_text_blocks: Dict[str, List[str]] = {}
         self.record = kwargs.get("record")
         # defect detection stage setting
-        self.max_turns = 150
+        # Tool-call/turn budget for the defect-detection agent. Configurable via
+        # DEFECT_MAX_TURNS so baseline and hints runs can share the same budget
+        # (keeps the A/B comparison fair). The prompt's stated budget is kept in
+        # sync by substituting this value into the prompt below.
+        self.defect_max_turns = int(os.environ.get("DEFECT_MAX_TURNS", "200"))
+        # Runaway guard: a normal run reports ~defect_max_turns; treat anything
+        # well beyond that as a malfunction and discard the result.
+        self.max_turns = self.defect_max_turns + 50
         # Prompt used for the defect-detection stage. Subclasses (e.g. the
         # hints-enabled tester) override this to swap in a different prompt.
         self.defect_prompt_key = "defect_detection_based_gold"
@@ -168,8 +175,9 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
         checklist_md = self._load_file_content(self.checklist_path)
         prompt = USER_PROMPT[self.defect_prompt_key].substitute(
             instruction=self.instruction, server_url=self.server_url, checklist=checklist_md,
+            max_turns=self.defect_max_turns,
         )
-        options = self._get_browser_agent_options(max_turns=100)
+        options = self._get_browser_agent_options(max_turns=self.defect_max_turns)
 
         async for message in query(prompt=prompt, options=options):
             self._log_session_id(message, session_name=stage, stage=stage, prompt=prompt)

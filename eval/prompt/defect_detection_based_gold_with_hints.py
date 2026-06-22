@@ -46,7 +46,7 @@ The ref-based tools (`browser_click`, `browser_type`, `browser_select_option`, `
 - Integrity: Execute all items; never skip. If an item cannot be done, mark FAIL with a concrete reason (no hallucination).
 - Hints are descriptive, not an oracle: `data-agent-*` describe what the UI *is/does*; they never tell you whether a test passes. Always judge actual behavior against your own inferred expectation.
 - Batching: For pure data entry (e.g., filling a form), you may combine multiple `fill/select` actions into a single `browser_run_code` block to save time.
-- Limited Budget: The entire execution process must operate within a limited budget of turn/tool-call (max 100 times total). The Semantic Hints channel is how you stay well under budget — plan first, observe compactly, act precisely.
+- Limited Budget: The entire execution process must operate within a limited budget of turn/tool-call (max $max_turns times total). The Semantic Hints channel is how you stay well under budget — plan first, observe compactly, act precisely.
 - Navigation: Only navigate if the checklist item explicitly requires it. Disable page refresh operations unless the page crashes.
 
 ## 2. Verification Logic

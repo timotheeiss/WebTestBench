@@ -26,6 +26,11 @@ export ANTHROPIC_DEFAULT_HAIKU_MODEL=$MODEL
 
 # Show the real browser on screen. Set to "true" to run headless instead.
 export SEMANTIC_HINTS_HEADLESS=${SEMANTIC_HINTS_HEADLESS:-false}
+
+# Tool-call/turn budget for the defect-detection agent. Read by both the baseline
+# and hints gold agents, so keep it identical across A/B runs. The agent's stated
+# budget in the prompt is synced to this value automatically.
+export DEFECT_MAX_TURNS=${DEFECT_MAX_TURNS:-200}
 # ======================================================================
 DATA_JSONL_PATH=./data/WebTestBench/WebTestBench_single.jsonl   # WebTestBench_0001 only
 PROJECT_ROOT=./data/WebTestBench/web_applications
