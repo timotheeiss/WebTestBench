@@ -27,9 +27,21 @@ Pick the element's `id` from `semantic_snapshot`, then target it by the stable s
 await page.locator("[data-agent-id='checkout.submit']").click();
 // fill an input
 await page.locator("[data-agent-id='filters.search']").fill("laptop");
-// choose a select option
-await page.locator("[data-agent-id='filters.category']").selectOption({ label: "Tech" });
+// choose a dropdown/select option (these are custom selects, not native <select>):
+// open the trigger, then click the option by its id — never browser_snapshot the menu.
+await page.locator("[data-agent-id='filters.category']").click();
+await page.locator("[data-agent-id='filters.category.option.tech']").click();
 ```
+
+## Choosing a dropdown / select option (no snapshot)
+A hinted select trigger lists its available options in its snapshot entry's
+`options` field, e.g. `"options": [{ "value": "tech", "label": "Tech Gadgets" }, ...]`.
+Each option is addressable as `<trigger-id>.option.<value>`. To select one:
+1. Click the trigger by its `data-agent-id` to open the menu.
+2. Click `[data-agent-id='<trigger-id>.option.<value>']`.
+
+Do **NOT** `browser_snapshot` the open dropdown to find the option — the option
+ids and labels are already known from the trigger's `options`.
 
 The ref-based tools (`browser_click`, `browser_type`, `browser_select_option`, `browser_fill_form`) require element refs from a `browser_snapshot`. Only take a `browser_snapshot` when you genuinely need a ref, or when the element you need has **no** `data-agent-id`.
 
