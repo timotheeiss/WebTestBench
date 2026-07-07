@@ -43,7 +43,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--project_root", type=str, default=None,
                         help="Root directory containing local projects (used when --use_web_url is not set).")
     parser.add_argument("--version", required=True, type=str,
-                        help="Version label used to group outputs/logs.")
+                        help="Version label used to group outputs/logs (e.g. the condition).")
+    parser.add_argument("--rep", type=str, default="rep1",
+                        help="Repetition label; results are written per app under <app>/<rep>/.")
     parser.add_argument("--base_port", type=int, default=6000,
                         help="Base port offset for local servers (port = base_port + int(record_id[-4:])).")
 
@@ -78,8 +80,9 @@ async def _run_record(
     # server_url = record.get("webpage_url", f"http://localhost:{args.base_port + int(record_id[-4:])}/")
 
     timestamp = time.strftime("%Y%m%d_%H%M%S")
-    output_dir = output_root / record_id
-    log_dir = log_root / record_id
+    # Reps are per app: <output_root>/<app>/<rep>/. Logs co-locate with results.
+    output_dir = output_root / record_id / args.rep
+    log_dir = log_root / record_id / args.rep
     log_file = log_dir / f"{timestamp}-eval.log"
 
     original_stdout = sys.stdout

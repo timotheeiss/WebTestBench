@@ -144,16 +144,17 @@ run_condition() {  # $1 name  $2 agent  $3 project_root
   echo "==  CONDITION: $cond   (agent=$agent, root=$root)"
   echo "================================================================"
   for r in $(seq 1 "$REPS"); do
-    local leaf="$RUN_DIR/$cond"          # run_agent appends /rep<r>/<app>
     echo "────────────────────────────────────────────────────────────"
-    echo "▶️  $cond rep $r/$REPS  ->  $leaf/rep$r/"
+    echo "▶️  $cond rep $r/$REPS  ->  $RUN_DIR/$cond/WebTestBench_XXXX/rep$r/"
+    # run_agent writes per app to <output_root>/<version>/<app>/<rep>/ ; reps are per-app.
     "$PYTHON" eval/run_agent.py \
         --agent "$agent" \
         --data_jsonl_path "$APPS_JSONL" \
         --project_root "$root" \
-        --output_root "$leaf" \
-        --log_root "$leaf" \
-        --version "rep$r" \
+        --output_root "$RUN_DIR" \
+        --log_root "$RUN_DIR" \
+        --version "$cond" \
+        --rep "rep$r" \
         --base_port "$BASE_PORT" \
         --api_base_url "$API_BASE_URL" \
         --api_key "$API_KEY" \

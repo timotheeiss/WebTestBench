@@ -159,7 +159,7 @@ export ANTHROPIC_DEFAULT_HAIKU_MODEL="$MODEL"
 ```bash
 # 1. Run baseline + hints over apps 0001–0005 (env-overridable: RUN_ID, APPS, REPS, MODEL)
 bash scripts/run_suite.sh
-#    -> ../experiments/runs/<run-id>/{baseline,hints}/rep<r>/WebTestBench_00XX/
+#    -> ../experiments/runs/<run-id>/{baseline,hints}/WebTestBench_00XX/rep<r>/
 
 # 2. Score every condition/rep leaf with the deterministic oracle scorer
 bash scripts/score_suite.sh <run-id>
