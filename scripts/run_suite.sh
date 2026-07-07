@@ -13,11 +13,13 @@
 #
 # Output layout (see ../experiments/README.md for the naming spec):
 #   ../experiments/runs/<run-id>/
-#       run_config.json                         # manifest: params + git SHAs
-#       <condition>/rep<r>/WebTestBench_00XX/    # results + logs co-located
+#       run_config.json                          # manifest: params + git SHAs
+#       <condition>/WebTestBench_00XX/rep<r>/     # results + logs + agent_view.txt
 #
-# An app whose result_extracted.md already exists is skipped, so re-running
-# resumes. Run from the WebTestBench directory:  bash scripts/run_suite.sh
+# agent_view.txt (what the agent saw + did) is dumped automatically per app by
+# run_agent.py; disable with AGENT_VIEW_DUMP=0, full snapshots with AGENT_VIEW_FULL=1.
+# An app whose result.md already exists is skipped, so re-running resumes.
+# Run from the WebTestBench directory:  bash scripts/run_suite.sh
 set -uo pipefail
 
 # ======================================================================
