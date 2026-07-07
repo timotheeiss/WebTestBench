@@ -9,16 +9,17 @@ Usage:
 - Pairs each tool_use (browser_*) with its tool_result.
 - For browser_snapshot, the tool_result IS the accessibility tree the model received.
 - Without --full, snapshots are truncated for readability; with --full, printed whole.
-- By default the report is written into the matching run's output folder
-  (e.g. outputs/<version>/<record_id>/agent_view.txt), resolved from the session id
-  recorded in that folder's session_meta.json. Override with --out, or force the
+- By default the report is written next to the run's session_meta.json
+  (e.g. experiments/runs/<run-id>/<condition>/<app>/<rep>/agent_view.txt), resolved
+  from the session id recorded in that file. Override with --out, or force the
   terminal with --stdout.
 """
 import json, sys, argparse, glob, os
 
 PROJECTS = os.path.expanduser("~/.claude/projects")
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-OUTPUTS = os.path.join(REPO_ROOT, "outputs")
+# Results live in the sibling experiments/ tree (new runs/ layout + _archive/).
+EXPERIMENTS = os.path.normpath(os.path.join(REPO_ROOT, "..", "experiments"))
 
 
 def resolve_transcript(arg: str) -> str:
@@ -31,9 +32,10 @@ def resolve_transcript(arg: str) -> str:
 
 
 def resolve_output_dir(session_id: str):
-    """Find the outputs/<version>/<record_id> folder whose session_meta.json
-    references this session id. Returns the dir path, or None."""
-    for meta in glob.glob(os.path.join(OUTPUTS, "*", "*", "session_meta.json")):
+    """Find the app-rep folder whose session_meta.json references this session id.
+    Searches the experiments/ tree (new runs/ layout, at any depth, and _archive/).
+    Returns the dir path, or None."""
+    for meta in glob.glob(os.path.join(EXPERIMENTS, "**", "session_meta.json"), recursive=True):
         try:
             if session_id in open(meta, encoding="utf-8").read():
                 return os.path.dirname(meta)
@@ -79,7 +81,7 @@ def main():
         if run_dir:
             out_path = os.path.join(run_dir, "agent_view.txt")
         else:
-            print(f"[warn] no outputs/*/*/session_meta.json references {session_id}; "
+            print(f"[warn] no session_meta.json under {EXPERIMENTS} references {session_id}; "
                   f"printing to stdout (use --out to force a path).", file=sys.stderr)
 
     # Collect tool_use blocks and tool_results (keyed by tool_use_id).

@@ -178,7 +178,8 @@ git SHAs) so it is reproducible from that file alone.
 | --- | --- |
 | `run_suite.sh` | A/B suite: baseline + hints over `APPS` × `REPS`, one run-id, visible browser. Writes `../experiments/runs/<run-id>/` + `run_config.json`. |
 | `score_suite.sh <run-id>` | Score every `<condition>/rep<r>` leaf of a run with the oracle scorer (`eval/scoring_oracle.py`). |
-| `dump_agent_view.py` | Replay a run's SDK session transcript to dump exactly what the agent saw (accessibility tree / hints) and did (tool calls). |
+| `dump_suite.sh <run-id> [--full]` | Re-dump `agent_view.txt` for every app-rep of a run (e.g. with `--full`, or for archived runs). Note: `run_suite.sh` already dumps it automatically per app — this is for re-generating. |
+| `dump_agent_view.py` | Replay ONE run's SDK session transcript to dump exactly what the agent saw (accessibility tree / hints) and did (tool calls). Auto-writes `agent_view.txt` next to that run's `session_meta.json`; `--stdout` / `--out` / `--full` to override. |
 | `legacy/` | Dismissed / superseded scripts (upstream two-stage tester, judge scorer, single-app runners). See `scripts/legacy/README.md`. |
 
 Analysis lives one level up in [`../experiments/analysis/`](../experiments/analysis/); the live-vs-legacy map for `eval/` is in [`eval/README.md`](eval/README.md).

@@ -2,6 +2,8 @@ import argparse
 import asyncio
 import json
 import logging
+import os
+import subprocess
 import sys
 import time
 import traceback
@@ -13,6 +15,34 @@ from utils import *
 
 
 AgentCls = Type[BaseAgent]
+
+# Sibling replay tool used to auto-dump the agent's-eye view after each run.
+DUMP_SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "dump_agent_view.py"
+
+
+def _dump_agent_view(output_dir: Path) -> None:
+    """Best-effort: write agent_view.txt (the observations the agent received +
+    the actions it took) next to this run's results, by replaying its SDK
+    transcript. Runs automatically after every app; never fails the run.
+
+    Opt out with AGENT_VIEW_DUMP=0; use AGENT_VIEW_FULL=1 for untruncated snapshots.
+    """
+    if os.environ.get("AGENT_VIEW_DUMP", "1") == "0":
+        return
+    try:
+        meta = json.loads((output_dir / "session_meta.json").read_text(encoding="utf-8"))
+        # The perception/action stage carries the transcript we want to replay.
+        session_id = (meta.get("defect_detection") or {}).get("session_id")
+        if not session_id:
+            print(f"[warn] agent_view dump skipped for {output_dir}: no session_id")
+            return
+        cmd = [sys.executable, str(DUMP_SCRIPT), session_id,
+               "--out", str(output_dir / "agent_view.txt")]
+        if os.environ.get("AGENT_VIEW_FULL", "0") == "1":
+            cmd.append("--full")
+        subprocess.run(cmd, check=False)
+    except Exception as e:
+        print(f"[warn] agent_view dump skipped for {output_dir}: {e}")
 
 
 def _parse_filter_ids(raw: Optional[str]) -> Optional[Set[str]]:
@@ -100,7 +130,7 @@ async def _run_record(
             output_dir=output_dir,
             event_log_stream=None,
         )
-        if probe_agent.result_extracted_path.exists():
+        if probe_agent.result_path.exists():
             return
 
         log_dir.mkdir(parents=True, exist_ok=True)
@@ -130,6 +160,9 @@ async def _run_record(
             record=record,
         )
         await agent.run()
+
+        # Capture what the agent saw/did while the SDK transcript is still fresh.
+        _dump_agent_view(output_dir)
 
     finally:
         sys.stdout = original_stdout
