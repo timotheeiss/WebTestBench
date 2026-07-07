@@ -414,6 +414,10 @@ class ClaudeCodeWebTester(BaseAgent):
                     "args": [
                         "-y", "@playwright/mcp@0.0.76",
                         "--isolated",
+                        # Use Playwright's bundled Chromium; without this the MCP
+                        # defaults to the "chrome" channel and fails where Google
+                        # Chrome isn't installed.
+                        "--browser", "chromium",
                         "--viewport-size", "1280,720",
                     ]
                 }
