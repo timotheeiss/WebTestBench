@@ -1,7 +1,6 @@
 import argparse
 import json
 import re
-from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -387,56 +386,6 @@ class ScoringPipeline_Oracle:
 
         return match_ids
 
-    def _build_detailed_matches(
-        self,
-        match_ids: List[Tuple[str, Optional[str]]],
-        gold_items: Dict[str, dict],
-        pred_items: Dict[str, dict]
-    ) -> List[dict]:
-        """Build verbose match records including gold/pred text content."""
-        # Convert pair list to `gold_id -> [pred_id, ...]`.
-        match_map = defaultdict(list)
-        for pred_id, gold_id in match_ids:
-            match_map[gold_id].append(pred_id)
-
-        detailed_matches = []
-        
-        # Emit one block per gold item.
-        for gold_id, gold_meta in gold_items.items():
-            gold_block = {
-                "gold": {
-                    "id": gold_id,
-                    "text": gold_meta.get("content"),
-                },
-                "pred": None,
-            }
-            
-            # Attach predictions mapped to this gold item.
-            for pred_id in match_map.get(gold_id, []):
-                pred_meta = pred_items.get(pred_id, {})
-                if gold_block["pred"] is None:
-                    gold_block["pred"] = []
-                gold_block["pred"].append({
-                    "id": pred_id,
-                    "text": pred_meta.get("content"),
-                })
-            
-            detailed_matches.append(gold_block)
-        
-        # Add unmatched predictions as a final block with `gold=None`.
-        unmatched_preds = match_map.get(None, [])
-        if unmatched_preds:
-            gold_block = {"gold": None, "pred": []}
-            for pred_id in unmatched_preds:
-                pred_meta = pred_items.get(pred_id, {})
-                gold_block["pred"].append({
-                    "id": pred_id,
-                    "text": pred_meta.get("content"),
-                })
-            detailed_matches.append(gold_block)
-
-        return detailed_matches
-
     def _compute_metrics(
         self,
         match_ids: List[Tuple[str, Optional[str]]],
@@ -545,7 +494,6 @@ class ScoringPipeline_Oracle:
         gold_items = self._parse_gold_checklist(record)
 
         pred_items = self._parse_pred_checklist(result_path)
-        match_source = "result"
 
         # Track tasks where all predicted items failed.
         if pred_items and all(not item.get("pass", False) for item in pred_items.values()):
@@ -559,14 +507,6 @@ class ScoringPipeline_Oracle:
 
         # Build direct matches by checklist order.
         match_ids = self._build_direct_matches(gold_items, pred_items)
-
-        # Persist detailed match artifacts for debugging/inspection.
-        detailed_matches = self._build_detailed_matches(match_ids, gold_items, pred_items)
-        self._write_json(output_dir / "score_match_ids.json", {
-            "matches": match_ids,
-            "detailed_matches": detailed_matches,
-            "source": match_source,
-        })
 
         # Compute overall metrics.
         metrics, _ = self._compute_metrics(match_ids, gold_items, pred_items)
