@@ -148,48 +148,40 @@ export ANTHROPIC_DEFAULT_HAIKU_MODEL="$MODEL"
 
 </details>
 
-```bash
-# Single-run evaluation
-bash scripts/run_webtester_cc.sh
+> **This fork runs only the defect-detection (gold) task**, under two conditions
+> — `baseline` (accessibility tree) vs `hints` (semantic-hints MCP). The upstream
+> two-stage tester and judge scorer are retired to `scripts/legacy/`. Results and
+> analysis live in the top-level `../experiments/` tree, not in this fork —
+> see [`../experiments/README.md`](../experiments/README.md) for the full spec.
 
-# Parallel evaluation
-bash scripts/run_webtester_cc_parallel.sh
-
-# Scoring
-bash scripts/run_scoring.sh
-```
-
-#### Single-app test (this fork)
-
-Run the testing pipeline on just one app (`WebTestBench_0001`) using the single-record dataset, after setting the API/model env vars above:
+#### The A/B pipeline (this fork)
 
 ```bash
-python eval/run_agent.py --agent claude_code \
-  --data_jsonl_path ./data/WebTestBench/WebTestBench_single.jsonl \
-  --project_root ./data/WebTestBench/web_applications \
-  --output_root ./outputs --log_root ./logs/eval \
-  --version "claudecode-${MODEL##*/}" --base_port 6000 \
-  --api_base_url "$API_BASE_URL" --api_key "$API_KEY" --model "$MODEL"
+# 1. Run baseline + hints over apps 0001–0005 (env-overridable: RUN_ID, APPS, REPS, MODEL)
+bash scripts/run_suite.sh
+#    -> ../experiments/runs/<run-id>/{baseline,hints}/rep<r>/WebTestBench_00XX/
+
+# 2. Score every condition/rep leaf with the deterministic oracle scorer
+bash scripts/score_suite.sh <run-id>
+
+# 3. Aggregate accuracy + efficiency into the comparison tables
+python ../experiments/analysis/aggregate.py --run_dir ../experiments/runs/<run-id>
+#    -> summary/{scores.csv, efficiency.csv, report.md}
 ```
 
-Gold mode (defect detection only — tests against the gold checklist, no checklist generation):
+Each run writes a `run_config.json` manifest (model, apps, reps, turn budget,
+git SHAs) so it is reproducible from that file alone.
 
-```bash
-python eval/run_agent.py --agent claude_code_gold \
-  --data_jsonl_path ./data/WebTestBench/WebTestBench_single.jsonl \
-  --project_root ./data/WebTestBench/web_applications \
-  --output_root ./outputs --log_root ./logs/eval \
-  --version "claudecode-${MODEL##*/}-gold" --base_port 6000 \
-  --api_base_url "$API_BASE_URL" --api_key "$API_KEY" --model "$MODEL"
-```
+### Scripts overview (`scripts/`)
 
-Score a gold run with the oracle scorer (deterministic id alignment, no judge model):
+| Script | What it does |
+| --- | --- |
+| `run_suite.sh` | A/B suite: baseline + hints over `APPS` × `REPS`, one run-id, visible browser. Writes `../experiments/runs/<run-id>/` + `run_config.json`. |
+| `score_suite.sh <run-id>` | Score every `<condition>/rep<r>` leaf of a run with the oracle scorer (`eval/scoring_oracle.py`). |
+| `dump_agent_view.py` | Replay a run's SDK session transcript to dump exactly what the agent saw (accessibility tree / hints) and did (tool calls). |
+| `legacy/` | Dismissed / superseded scripts (upstream two-stage tester, judge scorer, single-app runners). See `scripts/legacy/README.md`. |
 
-```bash
-python eval/scoring_oracle.py \
-  --dataset_path ./data/WebTestBench/WebTestBench.jsonl \
-  --output_root ./outputs --version "claudecode-${MODEL##*/}-gold"
-```
+Analysis lives one level up in [`../experiments/analysis/`](../experiments/analysis/); the live-vs-legacy map for `eval/` is in [`eval/README.md`](eval/README.md).
 
 
 ## 🙇 Acknowledgments
