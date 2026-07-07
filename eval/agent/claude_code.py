@@ -56,9 +56,9 @@ class ClaudeCodeWebTester(BaseAgent):
 
     async def run(self) -> bool:
         """Run checklist generation then execution."""
-        if self._should_skip_stage(self.result_extracted_path, stage="eval"):
+        if self._should_skip_stage(self.result_path, stage="eval"):
             return True
-        
+
         self._log_instruction()
 
         start_ts = time.time()
@@ -66,7 +66,6 @@ class ClaudeCodeWebTester(BaseAgent):
             self.server_deploy,
             self.checklist_generation,
             self.defect_detection,
-            self.extract_result_file,
         ]
 
         success = True
@@ -158,7 +157,6 @@ class ClaudeCodeWebTester(BaseAgent):
         
         if num_turns > self.max_turns:
             self.write_markdown(target_file, "")
-            self.write_markdown(self.result_extracted_path, "")
         else:
             final_result, from_result_message = self._extract_final_result(result_message, stage=stage)
             self._record_final_result_source(stage, from_result_message)

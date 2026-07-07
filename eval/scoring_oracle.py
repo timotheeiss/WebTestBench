@@ -320,7 +320,7 @@ class ScoringPipeline_Oracle:
     
     def _parse_pred_checklist(self, result_path: Path) -> Dict[str, dict]:
         """
-        Parse predicted checklist items from `result_extracted.md`.
+        Parse predicted checklist items from `result.md`.
 
         Expected line format:
             - [x] item_id: description
@@ -522,13 +522,13 @@ class ScoringPipeline_Oracle:
             }
         }
         """
-        result_path = output_dir / "result_extracted.md"
+        result_path = output_dir / "result.md"
         checklist_path = output_dir / "checklist.md"
-        
+
         # Handle missing output files.
         missing_result = not result_path.exists()
         if missing_result and not checklist_path.exists():
-            print(f"Skipping {record_id}: missing result_extracted.md and checklist.md")
+            print(f"Skipping {record_id}: missing result.md and checklist.md")
             self.missing_result_ids.append(record_id)
             return self._create_missing_result_bundle(record, output_dir)
 
@@ -538,7 +538,7 @@ class ScoringPipeline_Oracle:
             return self._create_missing_result_bundle(record, output_dir)
 
         if missing_result:
-            print(f"Missing result_extracted.md for {record_id}; using checklist.md for scoring")
+            print(f"Missing result.md for {record_id}; using checklist.md for scoring")
             self.missing_result_ids.append(record_id)
 
         # Parse gold checklist and predictions.

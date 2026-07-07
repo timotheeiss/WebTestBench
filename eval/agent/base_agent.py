@@ -5,7 +5,6 @@ import re
 import sys
 import time
 import subprocess
-import shutil
 from urllib.parse import urlparse
 from dataclasses import dataclass
 from pathlib import Path
@@ -48,44 +47,12 @@ class BaseAgent:
         self.current_stage: Optional[str] = None
 
         self.checklist_path = self.output_dir / "checklist.md"
+        # Single result artifact: result.md holds the extracted "# Test Result"
+        # checklist (the detection stage trims the agent's raw output to that
+        # section before writing). The raw transcript, if ever needed, lives in
+        # the co-located <ts>-eval.log.
         self.result_path = self.output_dir / "result.md"
-        self.result_extracted_path = self.output_dir / "result_extracted.md"
         self.session_meta_path = self.output_dir / "session_meta.json"
-    
-    async def extract_result_file(self) -> bool:
-        stage = "result_extract"
-        self.current_stage = stage
-
-        if self._should_skip_stage(self.result_extracted_path, stage):
-            return True
-
-        self._write_stage_success(stage, True)
-        try:
-            content = self._load_file_content(self.result_path)
-        except Exception as exc:
-            self._mark_stage(stage=stage, status="error", message=f"Failed to read result.md: {exc}")
-            return False
-
-        extracted = self._extract_test_result_section(content)
-        if extracted is None or extracted.strip() == "":
-            if self.result_path.exists():
-                timestamp = time.strftime("%Y%m%d_%H%M%S", time.localtime())
-                # result 
-                error_path = self.result_path.with_name(f"result-error_{timestamp}.md")
-                self.result_path.rename(error_path)
-                # session
-                session_error_path = self.session_meta_path.with_name(f"session_meta-error_{timestamp}.json")
-                shutil.copy2(self.session_meta_path, session_error_path)
-            self._mark_stage(stage=stage, status="error", message="Missing '# Test Result' section.")
-            return False
-
-        self.result_extracted_path.write_text(extracted, encoding="utf-8")
-        if self._verify_output_file(self.result_extracted_path):
-            self._emit_file_event(stage, self.result_extracted_path)
-            return True
-        else:
-            self._mark_stage(stage=stage, status="error", message=f"Stage {stage} did not produce {self.result_extracted_path}.")
-            return False
 
     def _extract_test_result_section(self, content: str) -> str:
         lines = content.splitlines()

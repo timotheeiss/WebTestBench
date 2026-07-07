@@ -60,9 +60,9 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
 
     async def run(self) -> bool:
         """Run checklist generation then execution."""
-        if self._should_skip_stage(self.result_extracted_path, stage="eval"):
+        if self._should_skip_stage(self.result_path, stage="eval"):
             return True
-        
+
         self._log_instruction()
 
         start_ts = time.time()
@@ -70,7 +70,6 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
             self.server_deploy,
             self.checklist_generation,
             self.defect_detection,
-            self.extract_result_file,
         ]
 
         success = True
@@ -209,14 +208,18 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
 
         if num_turns > self.max_turns:
             self.write_markdown(target_file, "")
-            self.write_markdown(self.result_extracted_path, "")
         else:
             final_result, from_result_message = self._extract_final_result(result_message, stage=stage)
             self._record_final_result_source(stage, from_result_message)
-            self.write_markdown(target_file, final_result)
-            if final_result == "":
+            # Trim the agent's raw output to just the "# Test Result" checklist
+            # section so result.md is the single, scorer-ready artifact.
+            final_result = self._extract_test_result_section(final_result)
+            if final_result.strip() == "":
+                # Don't persist an empty result.md — leaving it absent lets a
+                # re-run retry this app instead of skipping it as "done".
                 self._mark_stage(stage=stage, status="error", message=f"Stage {stage} produced invalid result content; missing '# Test Result'.",)
                 return False
+            self.write_markdown(target_file, final_result)
 
         if self._verify_output_file(target_file):
             self._emit_file_event(stage, target_file)
