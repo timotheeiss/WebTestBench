@@ -5,8 +5,6 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
-from openpyxl import Workbook
-
 from utils import *
 
 
@@ -19,7 +17,7 @@ class ScoringPipeline_Oracle:
     2. Parse gold checklist items and predicted checklist items.
     3. Align predictions to gold items directly by checklist order.
     4. Compute precision, recall, and F1 metrics.
-    5. Aggregate metrics and export JSON/Excel reports.
+    5. Aggregate metrics and export JSON reports.
     """
 
     def __init__(
@@ -27,10 +25,12 @@ class ScoringPipeline_Oracle:
         dataset_path: Path,
         output_root: Path,
         version: str,
+        rep: str = "rep1",
     ) -> None:
         self.dataset_path = dataset_path
         self.output_root = output_root
         self.version = version
+        self.rep = rep
         self.dataset = self._load_dataset()
 
         # Task IDs with missing extracted result files.
@@ -55,7 +55,7 @@ class ScoringPipeline_Oracle:
         3. Aggregate metrics and write summary artifacts.
         """
         # Clear stale missing-result logs from prior runs.
-        missing_path = self.output_root / "missing_results.json"
+        missing_path = self.output_root / f"{self.rep}_missing_results.json"
         if missing_path.exists():
             missing_path.unlink()
 
@@ -66,7 +66,7 @@ class ScoringPipeline_Oracle:
         for record_id, record in self.dataset.items():
             aggregators['total_count'] += 1
             
-            output_dir = self.output_root / record_id
+            output_dir = self.output_root / record_id / self.rep
             if not output_dir.exists():
                 print(f"Warning: output dir not found for {record_id}, skipping.")
                 continue
@@ -209,9 +209,8 @@ class ScoringPipeline_Oracle:
         }
         
         # Write output files.
-        self._write_json(self.output_root / "score_avg.json", merged_avg)
-        self._write_category_excel(category_avg, class_avg, avg_metrics)
-        
+        self._write_json(self.output_root / f"{self.rep}_score_avg.json", merged_avg)
+
         # Print top-line run summary.
         if avg_metrics:
             print_green(
@@ -292,100 +291,6 @@ class ScoringPipeline_Oracle:
             }
         
         return class_avg
-
-    def _write_category_excel(
-        self,
-        category_avg: Dict[str, dict],
-        class_avg: Dict[str, dict],
-        avg_metrics: Optional[Dict[str, float]],
-    ) -> None:
-        """Write an Excel report with category/class and overall score views."""
-        workbook = Workbook()
-        sheet = workbook.active
-        sheet.title = "category_scores"
-
-        # Create header row.
-        self._create_excel_header(sheet)
-        
-        # Fill data rows.
-        self._fill_excel_data(sheet, category_avg, class_avg, avg_metrics)
-        
-        # Persist workbook.
-        output_path = self.output_root / f"{self.version}_score.xlsx"
-        workbook.save(output_path)
-
-    def _create_excel_header(self, sheet) -> None:
-        """Create Excel header columns and row labels."""
-        # Keep first cell blank for row labels.
-        sheet.cell(row=1, column=1, value="")
-        
-        # Category columns.
-        for idx, category in enumerate(self.ordered_categories, start=2):
-            sheet.cell(row=1, column=idx, value=category)
-        
-        # Category overall column.
-        category_overall_col = len(self.ordered_categories) + 2
-        sheet.cell(row=1, column=category_overall_col, value="Overall")
-        
-        # Class columns.
-        class_start_col = category_overall_col + 1
-        for offset, cls in enumerate(self.ordered_classes):
-            sheet.cell(row=1, column=class_start_col + offset, value=cls)
-        
-        # Class overall column.
-        class_overall_col = class_start_col + len(self.ordered_classes)
-        sheet.cell(row=1, column=class_overall_col, value="Overall")
-        
-        # Row labels.
-        score_row_label = f"{self.version}_score"
-        sheet.cell(row=2, column=1, value=score_row_label)
-
-    def _fill_excel_data(
-        self, 
-        sheet, 
-        category_avg: Dict[str, dict],
-        class_avg: Dict[str, dict],
-        avg_metrics: Optional[Dict[str, float]]
-    ) -> None:
-        """Populate Excel score rows."""
-        def pct_str(value: float) -> str:
-            """Format decimal metric as a percentage string with one decimal place."""
-            return f"{round(value * 100, 1):.1f}"
-
-        # Fill category columns.
-        for idx, category in enumerate(self.ordered_categories, start=2):
-            metrics = category_avg.get(category)
-            if not metrics:
-                continue
-            self._fill_metric_cell(sheet, 2, idx, metrics, pct_str)
-
-        # Fill class columns.
-        class_start_col = len(self.ordered_categories) + 3
-        for offset, cls in enumerate(self.ordered_classes):
-            metrics = class_avg.get(cls)
-            col = class_start_col + offset
-            if not metrics:
-                continue
-            self._fill_metric_cell(sheet, 2, col, metrics, pct_str)
-
-        # Fill overall columns.
-        if avg_metrics:
-            category_overall_col = len(self.ordered_categories) + 2
-            class_overall_col = class_start_col + len(self.ordered_classes)
-            
-            self._fill_metric_cell(sheet, 2, category_overall_col, avg_metrics, pct_str)
-            self._fill_metric_cell(sheet, 2, class_overall_col, avg_metrics, pct_str)
-
-    def _fill_metric_cell(self, sheet, row: int, col: int, metrics: Dict, pct_str) -> None:
-        """Write one `P/R/F1` metric cell in percentage form."""
-        precision = metrics.get("precision", 0.0)
-        recall = metrics.get("recall", 0.0)
-        f1 = metrics.get("f1", 0.0)
-        sheet.cell(
-            row=row,
-            column=col,
-            value=f"{pct_str(precision)}/{pct_str(recall)}/{pct_str(f1)}",
-        )
 
     def _load_dataset(self) -> Dict[str, dict]:
         """Load dataset records from `.json` or `.jsonl` into an index-keyed map."""
@@ -804,7 +709,11 @@ def parse_args():
     )
     parser.add_argument(
         "--version", required=True, type=str,
-        help="Version label used to group outputs"
+        help="Version label used to group outputs (e.g. the condition)."
+    )
+    parser.add_argument(
+        "--rep", type=str, default="rep1",
+        help="Repetition label; per-app results are read from <app>/<rep>/."
     )
 
     return parser.parse_args()
@@ -823,6 +732,7 @@ def main():
         dataset_path=dataset_path,
         output_root=output_root,
         version=args.version,
+        rep=args.rep,
     )
     pipeline.run()
 
