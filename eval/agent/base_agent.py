@@ -13,11 +13,53 @@ from typing import Any, Dict, Optional, Literal
 from utils import *
 
 
+# Vars that route the spawned Claude Code CLI at a third-party gateway. In
+# subscription mode every one of these must be absent from the CLI's
+# environment, or it authenticates against the gateway instead of falling back
+# to the stored OAuth credentials.
+ANTHROPIC_ROUTING_VARS = (
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_DEFAULT_SONNET_MODEL",
+    "ANTHROPIC_DEFAULT_OPUS_MODEL",
+    "ANTHROPIC_DEFAULT_HAIKU_MODEL",
+)
+
+AuthMode = Literal["api", "subscription"]
+
+
 @dataclass
 class APIConfig:
-    base_url: str
-    api_key: str
     model: str
+    auth_mode: AuthMode = "api"
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+
+    def __post_init__(self) -> None:
+        if self.auth_mode == "api" and not (self.base_url and self.api_key):
+            raise ValueError("auth_mode='api' requires both base_url and api_key.")
+
+    def agent_env(self) -> Dict[str, str]:
+        """Env overrides for the Claude Code CLI the Agent SDK spawns.
+
+        Subscription mode returns {} and relies on scrub_routing_env() having
+        cleared the routing vars from this process: the SDK merges these
+        overrides *over* the inherited environment, so it cannot unset a var.
+        """
+        if self.auth_mode == "subscription":
+            return {}
+        return {
+            "ANTHROPIC_BASE_URL": self.base_url or "",
+            "ANTHROPIC_AUTH_TOKEN": self.api_key or "",
+            "ANTHROPIC_API_KEY": "",
+        }
+
+
+def scrub_routing_env() -> None:
+    """Drop gateway routing vars so the CLI falls back to subscription OAuth."""
+    for var in ANTHROPIC_ROUTING_VARS:
+        os.environ.pop(var, None)
 
 
 StageStatus = Literal["running", "complete", "skip", "error"]

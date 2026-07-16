@@ -390,11 +390,7 @@ class ClaudeCodeWebTester(BaseAgent):
             max_turns=max_turns,
             max_buffer_size=max_buffer_size,
             cwd=self.cwd_dir,
-            env={
-                "ANTHROPIC_BASE_URL": self.api_config.base_url,
-                "ANTHROPIC_AUTH_TOKEN": self.api_config.api_key,
-                "ANTHROPIC_API_KEY": ""
-            }
+            env=self.api_config.agent_env(),
         )
 
     def _get_browser_agent_options(
@@ -428,9 +424,5 @@ class ClaudeCodeWebTester(BaseAgent):
             max_turns=max_turns,
             max_buffer_size=max_buffer_size,
             cwd=self.cwd_dir,
-            env={
-                "ANTHROPIC_BASE_URL": self.api_config.base_url,
-                "ANTHROPIC_AUTH_TOKEN": self.api_config.api_key,
-                "ANTHROPIC_API_KEY": "",
-            }
+            env=self.api_config.agent_env(),
         )

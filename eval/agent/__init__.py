@@ -1,6 +1,6 @@
 """Agent implementations and registry for WebProber-Bench."""
 
-from .base_agent import APIConfig, BaseAgent
+from .base_agent import APIConfig, BaseAgent, scrub_routing_env
 
 
 AVAILABLE_AGENTS = {
@@ -24,4 +24,5 @@ __all__ = [
     "APIConfig",
     "BaseAgent",
     "AGENT_REGISTRY",
+    "scrub_routing_env",
 ]

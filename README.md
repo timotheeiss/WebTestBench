@@ -87,6 +87,24 @@ If you change the Playwright MCP version, make sure to update the corresponding 
 
 **3) Configure OpenRouter for API Models**
 
+> **Fork note — `AUTH_MODE`.** `scripts/run_suite.sh` supports two auth paths. This
+> section covers `AUTH_MODE=api` (the default), which routes the Agent SDK at
+> OpenRouter. `AUTH_MODE=subscription` instead uses the Claude Code login on the
+> machine (`claude /login`) and needs no key or the `.claude.json` env block below:
+>
+> ```bash
+> AUTH_MODE=subscription bash scripts/run_suite.sh   # dev/debug; model defaults to claude-sonnet-4-5
+> AUTH_MODE=api          bash scripts/run_suite.sh   # measured runs
+> ```
+>
+> **Use `api` for measured runs.** A subscription enforces rate limits the API path
+> doesn't: hitting a cap mid-suite stalls the agent, and that lands in the latency
+> measurements. It can also bias the A/B — the baseline condition burns more tokens
+> by hypothesis, so it hits caps sooner than the hints condition and looks faster
+> for reasons unrelated to hints. Token counts stay accurate either way, but
+> `total_cost_usd` becomes a notional list-price estimate rather than real spend.
+> The active mode is recorded as `auth_mode` in each run's `run_config.json`.
+
 We use OpenRouter to access and route requests to different models, but other providers are also supported.
 
 For OpenRouter integration, follow the official guide:

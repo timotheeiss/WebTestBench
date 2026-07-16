@@ -27,9 +27,37 @@ set -uo pipefail
 # ======================================================================
 [ -f .env ] && set -a && . ./.env && set +a
 
-API_BASE_URL=${API_BASE_URL:-https://openrouter.ai/api}
-API_KEY=${API_KEY:?API_KEY is required (set it in .env)}
-MODEL=${MODEL:-anthropic/claude-sonnet-4-6}          # same model for both conditions
+# AUTH_MODE=api          -> route the agent at API_BASE_URL with API_KEY (OpenRouter).
+# AUTH_MODE=subscription -> use the Claude Code login on this machine (`claude /login`).
+#
+# Use "api" for measured runs that go in the write-up. A subscription enforces
+# rate limits the API path doesn't: when a cap is hit mid-suite the agent stalls,
+# and that lands directly in the latency measurements. Worse, it biases the A/B —
+# the baseline condition burns more tokens by hypothesis, so it hits caps sooner
+# than the hints condition and looks slower for reasons unrelated to hints.
+# Token counts stay accurate, but total_cost_usd becomes a notional list-price
+# estimate rather than real spend — a subscription run bills nothing per-request.
+AUTH_MODE=${AUTH_MODE:-api}
+
+case "$AUTH_MODE" in
+  api)
+    API_BASE_URL=${API_BASE_URL:-https://openrouter.ai/api}
+    API_KEY=${API_KEY:?API_KEY is required for AUTH_MODE=api (set it in .env)}
+    MODEL=${MODEL:-anthropic/claude-sonnet-4-6}     # same model for both conditions
+    ;;
+  subscription)
+    # Ignore any OpenRouter values from .env: MODEL there is a gateway slug
+    # (e.g. anthropic/claude-haiku-4.5) that won't resolve against the subscription.
+    API_BASE_URL=""
+    API_KEY=""
+    MODEL=${SUBSCRIPTION_MODEL:-claude-sonnet-4-5}
+    # These would be inherited by the spawned CLI and re-route it at the gateway.
+    unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY
+    ;;
+  *)
+    echo "❌ AUTH_MODE must be 'api' or 'subscription' (got '$AUTH_MODE')"; exit 1
+    ;;
+esac
 
 APPS=${APPS:-"0001 0002 0003 0004 0005"}             # app numbers to test
 REPS=${REPS:-1}                                       # repetitions per condition
@@ -43,9 +71,15 @@ RUN_ID=${RUN_ID:-"$(date +%Y-%m-%d)_${MODEL_SLUG}"}
 # Identical tool/turn budget for both conditions.
 export DEFECT_MAX_TURNS=${DEFECT_MAX_TURNS:-200}
 export SEMANTIC_HINTS_HEADLESS=${SEMANTIC_HINTS_HEADLESS:-false}   # visible browser
-export ANTHROPIC_DEFAULT_SONNET_MODEL=$MODEL
-export ANTHROPIC_DEFAULT_OPUS_MODEL=$MODEL
-export ANTHROPIC_DEFAULT_HAIKU_MODEL=$MODEL
+# Gateway model aliasing only — under a subscription these would override the
+# real model IDs the CLI resolves against the Anthropic API.
+if [ "$AUTH_MODE" = "api" ]; then
+  export ANTHROPIC_DEFAULT_SONNET_MODEL=$MODEL
+  export ANTHROPIC_DEFAULT_OPUS_MODEL=$MODEL
+  export ANTHROPIC_DEFAULT_HAIKU_MODEL=$MODEL
+else
+  unset ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL
+fi
 
 DATASET=./data/WebTestBench/WebTestBench.jsonl
 BASELINE_ROOT=./data/WebTestBench/web_applications
@@ -116,7 +150,8 @@ cfg = {
     "created": time.strftime("%Y-%m-%dT%H:%M:%S"),
     "model": "$MODEL",
     "model_slug": "$MODEL_SLUG",
-    "api_base_url": "$API_BASE_URL",
+    "auth_mode": "$AUTH_MODE",
+    "api_base_url": "$API_BASE_URL" or None,
     "apps": "$APPS".split(),
     "reps": int("$REPS"),
     "base_port": int("$BASE_PORT"),
@@ -158,8 +193,9 @@ run_condition() {  # $1 name  $2 agent  $3 project_root
         --version "$cond" \
         --rep "rep$r" \
         --base_port "$BASE_PORT" \
-        --api_base_url "$API_BASE_URL" \
-        --api_key "$API_KEY" \
+        --auth_mode "$AUTH_MODE" \
+        ${API_BASE_URL:+--api_base_url "$API_BASE_URL"} \
+        ${API_KEY:+--api_key "$API_KEY"} \
         --model "$MODEL" \
     || { echo "❌ FAILED: $cond rep$r"; FAILURES+=("$cond rep$r"); }
   done
@@ -167,7 +203,8 @@ run_condition() {  # $1 name  $2 agent  $3 project_root
 
 NAPPS=$(echo $APPS | wc -w | tr -d ' ')
 echo "Suite plan: run-id=$RUN_ID  apps [$APPS] × $REPS reps × 2 conditions = $(( NAPPS * REPS * 2 )) app-runs"
-echo "Model: $MODEL   headless=$SEMANTIC_HINTS_HEADLESS   turn budget: $DEFECT_MAX_TURNS"
+echo "Model: $MODEL   auth: $AUTH_MODE   headless=$SEMANTIC_HINTS_HEADLESS   turn budget: $DEFECT_MAX_TURNS"
+[ "$AUTH_MODE" = "subscription" ] && echo "⚠️  Subscription auth: rate limits can distort latency — not for measured runs."
 
 run_condition "baseline" "claude_code_gold"       "$BASELINE_ROOT"
 run_condition "hints"    "claude_code_gold_hints" "$HINTS_ROOT"

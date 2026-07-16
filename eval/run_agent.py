@@ -10,7 +10,7 @@ import traceback
 from pathlib import Path
 from typing import Dict, Optional, Set, Type
 
-from agent import APIConfig, BaseAgent, AGENT_REGISTRY
+from agent import APIConfig, BaseAgent, AGENT_REGISTRY, scrub_routing_env
 from utils import *
 
 
@@ -79,10 +79,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base_port", type=int, default=6000,
                         help="Base port offset for local servers (port = base_port + int(record_id[-4:])).")
 
-    parser.add_argument("--api_base_url", required=True, type=str,
-                        help="Base URL for API server.")
-    parser.add_argument("--api_key", required=True, type=str,
-                        help="API key for API server.")
+    parser.add_argument("--auth_mode", type=str, default="api",
+                        choices=["api", "subscription"],
+                        help="'api' routes the agent at --api_base_url with --api_key; "
+                             "'subscription' uses the Claude Code login on this machine.")
+    parser.add_argument("--api_base_url", type=str, default=None,
+                        help="Base URL for API server. Required for --auth_mode api.")
+    parser.add_argument("--api_key", type=str, default=None,
+                        help="API key for API server. Required for --auth_mode api.")
     parser.add_argument("--model", required=True, type=str,
                         help="Model name, e.g., claude-sonnet-4-5.")
 
@@ -189,7 +193,15 @@ async def main() -> None:
     else:
         raise KeyError(f"Unknown agent '{agent_name}'. Available: {', '.join(sorted(AGENT_REGISTRY.keys()))}")
 
-    api_config = APIConfig(base_url=args.api_base_url, api_key=args.api_key, model=args.model)
+    if args.auth_mode == "subscription":
+        scrub_routing_env()
+
+    api_config = APIConfig(
+        model=args.model,
+        auth_mode=args.auth_mode,
+        base_url=args.api_base_url,
+        api_key=args.api_key,
+    )
 
     data_jsonl_path = Path(args.data_jsonl_path)
     if not data_jsonl_path.exists():
