@@ -20,18 +20,15 @@ This output is far smaller than a full accessibility tree. Prefer it. Both MCPs 
 - Inspect lower level when hints are not enough: `browser_snapshot` (full accessibility tree — expensive), console/network, etc.
 
 ## How to act on a hinted element
-Pick the element's `id` from `semantic_snapshot`, then target it by the stable selector `[data-agent-id='<id>']`. The cheapest path needs **no** Playwright snapshot — drive the action by selector with `browser_run_code`, e.g.:
+Pick the element's `id` from `semantic_snapshot`, then target it by the stable selector `[data-agent-id='<id>']`. The Playwright action tools (`browser_click`, `browser_type`, `browser_select_option`, `browser_fill_form`) accept this CSS selector directly as their `target` — **no** `browser_snapshot` and no element ref needed, e.g.:
 
-```js
-// click an action
-await page.locator("[data-agent-id='checkout.submit']").click();
-// fill an input
-await page.locator("[data-agent-id='filters.search']").fill("laptop");
-// choose a dropdown/select option (these are custom selects, not native <select>):
-// open the trigger, then click the option by its id — never browser_snapshot the menu.
-await page.locator("[data-agent-id='filters.category']").click();
-await page.locator("[data-agent-id='filters.category.option.tech']").click();
-```
+- Click an action: `browser_click` with `target: "[data-agent-id='checkout.submit']"`.
+- Fill one input: `browser_type` with `target: "[data-agent-id='filters.search']"`, `text: "laptop"`.
+- Fill a whole form in ONE call: `browser_fill_form` with a `fields` list where each field's `target` is a `[data-agent-id='<id>']` selector. Never fill a form one `browser_type` call per field.
+- Choose a dropdown/select option (these are custom selects, not native `<select>`): open the trigger, then click the option by its id — never `browser_snapshot` the menu:
+  1. `browser_click` on `[data-agent-id='filters.category']`
+  2. `browser_click` on `[data-agent-id='filters.category.option.tech']`
+- Repeat an interaction many times (e.g. clicking the same button N times) or read bulk DOM state: use ONE `browser_evaluate` loop instead of many separate clicks, e.g. `() => { const b = document.querySelector("[data-agent-id='tickets.item.t1.increment']"); for (let i = 0; i < 20; i++) { if (b.disabled) return { stoppedAt: i, disabled: true }; b.click(); } return { done: true }; }`.
 
 ## Choosing a dropdown / select option (no snapshot)
 A hinted select trigger lists its available options in its snapshot entry's
@@ -43,13 +40,13 @@ Each option is addressable as `<trigger-id>.option.<value>`. To select one:
 Do **NOT** `browser_snapshot` the open dropdown to find the option — the option
 ids and labels are already known from the trigger's `options`.
 
-The ref-based tools (`browser_click`, `browser_type`, `browser_select_option`, `browser_fill_form`) require element refs from a `browser_snapshot`. Only take a `browser_snapshot` when you genuinely need a ref, or when the element you need has **no** `data-agent-id`.
+Only take a `browser_snapshot` when the element you need has **no** `data-agent-id` (then act on it by ref), or when the hint channel is genuinely insufficient.
 
 # Execution Standards
 
 ## 1. Interaction Strategy
 - Observe first with Semantic Hints: begin every screen with ONE `semantic_snapshot` to map the page, instead of a full `browser_snapshot`.
-- Act with Playwright by `[data-agent-id='<id>']` selector (prefer `browser_run_code`; no snapshot needed).
+- Act with Playwright by passing the `[data-agent-id='<id>']` selector directly to the action tools (no snapshot needed).
 - Verify single values with `semantic_observe({ "id" })` — do NOT re-snapshot the whole page just to read one element's value/state.
 - Use the two channels together: when you must inspect several independent elements, batch the `semantic_observe` calls in a single step; interleave Playwright actions and Semantic Hints observations freely.
 - DOM-Only: Do NOT use screenshots or visual validation. Rely on DOM/semantic attributes (text, id, role, state, accessibility) for verification.
@@ -57,7 +54,7 @@ The ref-based tools (`browser_click`, `browser_type`, `browser_select_option`, `
 - Fallback: If a checklist item concerns an element with no `data-agent-id`, or `semantic_snapshot`/`semantic_observe` is insufficient, fall back to `browser_snapshot` and the ref-based Playwright tools for that item only.
 - Integrity: Execute all items; never skip. If an item cannot be done, mark FAIL with a concrete reason (no hallucination).
 - Hints are descriptive, not an oracle: `data-agent-*` describe what the UI *is/does*; they never tell you whether a test passes. Always judge actual behavior against your own inferred expectation.
-- Batching: For pure data entry (e.g., filling a form), you may combine multiple `fill/select` actions into a single `browser_run_code` block to save time.
+- Batching: For pure data entry (e.g., filling a form), combine all fields into a single `browser_fill_form` call. For repetitive interactions or bulk DOM reads, use a single `browser_evaluate` loop rather than many separate tool calls.
 - Limited Budget: The entire execution process must operate within a limited budget of turn/tool-call (max $max_turns times total). The Semantic Hints channel is how you stay well under budget — plan first, observe compactly, act precisely.
 - Navigation: Only navigate if the checklist item explicitly requires it. Disable page refresh operations unless the page crashes.
 
