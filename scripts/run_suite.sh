@@ -63,6 +63,19 @@ APPS=${APPS:-"0001 0002 0003 0004 0005"}             # app numbers to test
 REPS=${REPS:-1}                                       # repetitions per condition
 BASE_PORT=${BASE_PORT:-6000}
 
+# Which conditions to run, in order. Both is the point of the study — narrow it
+# only to top up a partial run or to debug one arm. An A/B whose halves were run
+# at different times isn't apples-to-apples: the model, the machine, and (on a
+# subscription) the rate-limit state all drift between them.
+CONDITIONS=${CONDITIONS:-"baseline hints"}
+for c in $CONDITIONS; do
+  case "$c" in
+    baseline|hints) ;;
+    *) echo "❌ CONDITIONS must contain only 'baseline' and/or 'hints' (got '$c')"; exit 1 ;;
+  esac
+done
+NCONDS=$(echo $CONDITIONS | wc -w | tr -d ' ')
+
 # Canonical model slug: lowercase, '.'/'/' -> '-', drop leading 'claude-'.
 MODEL_SLUG=$(printf '%s' "${MODEL##*/}" | tr '[:upper:]' '[:lower:]' | tr './' '--' | sed 's/^claude-//')
 # run-id: date + intent slug. Default slug is the model; override RUN_ID for a purpose.
@@ -135,6 +148,24 @@ PY
 # ======================================================================
 "$PYTHON" - "$RUN_DIR/run_config.json" <<PY
 import json, hashlib, subprocess, time, os
+
+KNOWN = {
+    "baseline": {"agent": "claude_code_gold",       "project_root": "$BASELINE_ROOT"},
+    "hints":    {"agent": "claude_code_gold_hints",  "project_root": "$HINTS_ROOT"},
+}
+selected = "$CONDITIONS".split()
+# This run's conditions, UNIONed with any already recorded for this run-id:
+# topping up one arm must not erase the record that the other one ran, or the
+# manifest stops describing what's actually in the folder.
+conditions = {}
+try:
+    with open("$RUN_DIR/run_config.json", encoding="utf-8") as _f:
+        conditions = json.load(_f).get("conditions", {}) or {}
+except Exception:
+    pass
+for _c in selected:
+    conditions[_c] = KNOWN[_c]
+
 def sha(path):
     try:
         return subprocess.check_output(["git","-C",path,"rev-parse","HEAD"], text=True).strip()
@@ -158,10 +189,7 @@ cfg = {
     "defect_max_turns": int("$DEFECT_MAX_TURNS"),
     "headless": "$SEMANTIC_HINTS_HEADLESS",
     "dataset": "$DATASET",
-    "conditions": {
-        "baseline": {"agent": "claude_code_gold",       "project_root": "$BASELINE_ROOT"},
-        "hints":    {"agent": "claude_code_gold_hints",  "project_root": "$HINTS_ROOT"},
-    },
+    "conditions": conditions,
     "git_sha": {"webtestbench": sha("."), "semantic_hints_mcp": sha("$MCP_DIR")},
     "mcp_dist_sha256_16": filehash("$MCP_DIR/dist/index.js"),
 }
@@ -202,12 +230,17 @@ run_condition() {  # $1 name  $2 agent  $3 project_root
 }
 
 NAPPS=$(echo $APPS | wc -w | tr -d ' ')
-echo "Suite plan: run-id=$RUN_ID  apps [$APPS] × $REPS reps × 2 conditions = $(( NAPPS * REPS * 2 )) app-runs"
+echo "Suite plan: run-id=$RUN_ID  apps [$APPS] × $REPS reps × $NCONDS condition(s) [$CONDITIONS] = $(( NAPPS * REPS * NCONDS )) app-runs"
+[ "$NCONDS" -lt 2 ] && echo "⚠️  Single condition — this run alone is not an A/B comparison."
 echo "Model: $MODEL   auth: $AUTH_MODE   headless=$SEMANTIC_HINTS_HEADLESS   turn budget: $DEFECT_MAX_TURNS"
 [ "$AUTH_MODE" = "subscription" ] && echo "⚠️  Subscription auth: rate limits can distort latency — not for measured runs."
 
-run_condition "baseline" "claude_code_gold"       "$BASELINE_ROOT"
-run_condition "hints"    "claude_code_gold_hints" "$HINTS_ROOT"
+for cond in $CONDITIONS; do
+  case "$cond" in
+    baseline) run_condition "baseline" "claude_code_gold"       "$BASELINE_ROOT" ;;
+    hints)    run_condition "hints"    "claude_code_gold_hints" "$HINTS_ROOT" ;;
+  esac
+done
 
 # ======================================================================
 # Summary
