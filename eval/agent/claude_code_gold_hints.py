@@ -171,7 +171,7 @@ class ClaudeCodeWebTester_GoldHints(ClaudeCodeWebTester_Gold):
                         "--viewport-size", "1280,720",
                     ],
                 },
-                # Semantic-hints MCP reads data-agent-* hints from the SAME browser.
+                # Semantic-hints MCP reads data-semtag-* hints from the SAME browser.
                 SEMANTIC_HINTS_SERVER: {
                     "type": "stdio",
                     "command": "node",

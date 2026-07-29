@@ -2,7 +2,7 @@
 # Run the HINTS-enabled gold tester on WebTestBench_0001 only.
 #
 # This launches one shared, VISIBLE Chromium; the official Playwright MCP attaches
-# to it (--cdp-endpoint) and the semantic-hints MCP reads data-agent-* hints from
+# to it (--cdp-endpoint) and the semantic-hints MCP reads data-semtag-* hints from
 # the same browser (SEMANTIC_HINTS_CDP_URL). You watch the real interactions on
 # screen, and token usage / cost is printed to the console at the end of the run.
 #
