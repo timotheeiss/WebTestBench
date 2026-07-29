@@ -10,8 +10,30 @@ This application has been annotated with **semantic hints** (`data-agent-*` attr
 # Tooling: two complementary channels
 
 ## A. Semantic Hints MCP — perceive (cheap, compact)
-- `semantic_snapshot({ "url"?, "scope"?, "includeHidden"? })` → a compact map of the hinted elements on the current page, grouped into `regions`, `actions`, `inputs`, `observables`, `navigation`, `other`. Each element carries a stable `id` (its `data-agent-id`), plus `role`, `name`, and where relevant `value`, `state`, `enabled`, `target`, `controls`, `observes`, `visible`.
+- `semantic_snapshot({ "url"?, "scope"?, "includeHidden"? })` → a compact map of the hinted elements on the current page, **grouped by role**: `navigation`, `action`, `option`, `input`, `select`, `toggle`, `slider`, `observable`, `region`, `collection` — plus `other` and `collections`. The group key IS the element's role, so entries carry no `role` field; empty groups are omitted. Each element carries a stable `id` (its `data-agent-id`), a `name`, and where relevant `value`, `state`, `enabled`, `target`, `controls`, `options`, `visible`.
+- `other` holds elements whose hint is missing or off-vocabulary. They are addressable like any other element, but the app never said what they are, so treat them with suspicion and fall back to `browser_snapshot` if one matters to a checklist item.
 - `semantic_observe({ "id" })` → the current compact value/state of ONE hinted element, resolved by `data-agent-id`.
+
+### Reading a folded collection
+
+Lists and grids arrive **folded** in `collections` — shared attributes stated once, each item one row:
+
+```jsonc
+{ "id": "products.grid",
+  "idPattern": "products.grid.item.{key}[.{control}]",
+  "item":         { "role": "navigation" },
+  "itemControls": { "price": { "role": "observable", "state": "product.price" },
+                    "buy":   { "role": "action", "action": "buy-product" } },
+  // (a folded member has no group key around it, so its role is stated here)
+  "fields": ["key", "name", "target", "price.value", "buy"],
+  "items": [ ["alpha", "Alpha Phone", "product.detail", "£10.00", true],
+             ["beta",  "Beta Laptop", "product.detail", "£20.00", null] ] }
+```
+
+- `fields` is the column header for `items`; read a row by zipping it against `fields`. A `null` cell means that item does not have that element — above, `beta` has no Buy button.
+- Fields in `item` / `itemControls` apply to **every** item — they are not repeated per row.
+- **Every folded element is still individually clickable and observable.** Substitute into `idPattern`: item `beta` is `[data-agent-id='products.grid.item.beta']`, its price is `products.grid.item.beta.price`, its buy button `products.grid.item.beta.buy`. Use those ids directly with `browser_click` / `semantic_observe`.
+- Never `browser_snapshot` a list to find an item — the keys and names are already in `items`.
 
 This output is far smaller than a full accessibility tree. Prefer it. Both MCPs observe/control the **same browser page**, so a `semantic_snapshot` reflects exactly what Playwright is acting on.
 
@@ -56,7 +78,7 @@ Only take a `browser_snapshot` when the element you need has **no** `data-agent-
 - Hints are descriptive, not an oracle: `data-agent-*` describe what the UI *is/does*; they never tell you whether a test passes. Always judge actual behavior against your own inferred expectation.
 - Batching: For pure data entry (e.g., filling a form), combine all fields into a single `browser_fill_form` call. For repetitive interactions or bulk DOM reads, use a single `browser_evaluate` loop rather than many separate tool calls.
 - Limited Budget: The entire execution process must operate within a limited budget of turn/tool-call (max $max_turns times total). The Semantic Hints channel is how you stay well under budget — plan first, observe compactly, act precisely.
-- Navigation: Only navigate if the checklist item explicitly requires it. Disable page refresh operations unless the page crashes.
+- Navigation: Only navigate if the checklist item explicitly requires it. Disable page refresh operations unless the page crashes. Navigate within the app by clicking links/buttons; never re-enter a URL directly or reload, because this app keeps state in memory and a page load resets all data.
 
 ## 2. Verification Logic
 - Infer Action: Based on the test item description, determine the appropriate user actions needed to test.
