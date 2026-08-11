@@ -51,8 +51,7 @@ These ids are stable across re-renders, so a selector stays valid for as long as
 
 For an element with **no** `data-semtag-id`, take a `browser_snapshot` and pass the bare ref from `[ref=eNNN]` instead (e.g. `target: "e461"`, not `"[ref=e461]"` and not the whole snapshot line). Refs are assigned per snapshot, so re-snapshot if the page has re-rendered.""" % TARGET_CONTRACT
 
-CHANNEL_EXTRA_RULES = 
-"""- Fallback: If a checklist item concerns an element with no `data-semtag-id`, or `semantic_snapshot`/`semantic_observe` is insufficient, fall back to `browser_snapshot` for that item only.
+CHANNEL_EXTRA_RULES = """- Fallback: If a checklist item concerns an element with no `data-semtag-id`, or `semantic_snapshot`/`semantic_observe` is insufficient, fall back to `browser_snapshot` for that item only.
 - Hints are descriptive, not an oracle: `data-semtag-*` describe what the UI *is/does*; they never tell you whether a test passes. Always judge actual behavior against your own inferred expectation."""
 
 PROMPT_DEFECT_DETECTION_BASED_GOLD_WITH_HINTS = build(

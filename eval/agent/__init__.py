@@ -1,6 +1,6 @@
 """Agent implementations and registry for WebProber-Bench."""
 
-from .base_agent import APIConfig, BaseAgent, scrub_routing_env
+from .base_agent import APIConfig, BaseAgent, browser_headless, scrub_routing_env
 
 
 AVAILABLE_AGENTS = {
@@ -23,6 +23,7 @@ for name, (module_name, class_name) in AVAILABLE_AGENTS.items():
 __all__ = [
     "APIConfig",
     "BaseAgent",
+    "browser_headless",
     "AGENT_REGISTRY",
     "scrub_routing_env",
 ]

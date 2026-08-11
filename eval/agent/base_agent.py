@@ -29,6 +29,19 @@ ANTHROPIC_ROUTING_VARS = (
 AuthMode = Literal["api", "subscription"]
 
 
+# Headless is ONE knob for BOTH A/B arms. The baseline arm launches Chromium via
+# the Playwright MCP and the hints arm via the shared CDP launcher, so the two
+# have to read the same variable or the conditions can silently diverge on
+# browser mode — which is exactly what happened while this was named
+# SEMANTIC_HINTS_HEADLESS and only reached the hints arm.
+#
+# Default true: it is what upstream WebTestBench ran, and the only mode a
+# display-less host supports. Set BROWSER_HEADLESS=false to watch a run locally.
+def browser_headless() -> bool:
+    """Whether both conditions should run their browser headless."""
+    return os.environ.get("BROWSER_HEADLESS", "true").strip().lower() not in ("false", "0", "no")
+
+
 @dataclass
 class APIConfig:
     model: str

@@ -83,7 +83,10 @@ RUN_ID=${RUN_ID:-"$(date +%Y-%m-%d)_${MODEL_SLUG}"}
 
 # Identical tool/turn budget for both conditions.
 export DEFECT_MAX_TURNS=${DEFECT_MAX_TURNS:-200}
-export SEMANTIC_HINTS_HEADLESS=${SEMANTIC_HINTS_HEADLESS:-false}   # visible browser
+# Headless for BOTH conditions (upstream WebTestBench's behaviour, and the only
+# mode a display-less host supports). One knob drives both arms — see
+# eval/agent/base_agent.py:browser_headless(). Set false to watch a run locally.
+export BROWSER_HEADLESS=${BROWSER_HEADLESS:-true}
 # Gateway model aliasing only — under a subscription these would override the
 # real model IDs the CLI resolves against the Anthropic API.
 if [ "$AUTH_MODE" = "api" ]; then
@@ -187,7 +190,7 @@ cfg = {
     "reps": int("$REPS"),
     "base_port": int("$BASE_PORT"),
     "defect_max_turns": int("$DEFECT_MAX_TURNS"),
-    "headless": "$SEMANTIC_HINTS_HEADLESS",
+    "headless": "$BROWSER_HEADLESS",
     "dataset": "$DATASET",
     "conditions": conditions,
     "git_sha": {"webtestbench": sha("."), "semantic_hints_mcp": sha("$MCP_DIR")},
@@ -232,7 +235,7 @@ run_condition() {  # $1 name  $2 agent  $3 project_root
 NAPPS=$(echo $APPS | wc -w | tr -d ' ')
 echo "Suite plan: run-id=$RUN_ID  apps [$APPS] × $REPS reps × $NCONDS condition(s) [$CONDITIONS] = $(( NAPPS * REPS * NCONDS )) app-runs"
 [ "$NCONDS" -lt 2 ] && echo "⚠️  Single condition — this run alone is not an A/B comparison."
-echo "Model: $MODEL   auth: $AUTH_MODE   headless=$SEMANTIC_HINTS_HEADLESS   turn budget: $DEFECT_MAX_TURNS"
+echo "Model: $MODEL   auth: $AUTH_MODE   headless=$BROWSER_HEADLESS   turn budget: $DEFECT_MAX_TURNS"
 [ "$AUTH_MODE" = "subscription" ] && echo "⚠️  Subscription auth: rate limits can distort latency — not for measured runs."
 
 for cond in $CONDITIONS; do

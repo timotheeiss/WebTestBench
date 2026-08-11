@@ -30,7 +30,7 @@ export ANTHROPIC_DEFAULT_OPUS_MODEL=$MODEL
 export ANTHROPIC_DEFAULT_HAIKU_MODEL=$MODEL
 
 # Show the real browser on screen. Set to "true" to run headless instead.
-export SEMANTIC_HINTS_HEADLESS=${SEMANTIC_HINTS_HEADLESS:-false}
+export BROWSER_HEADLESS=${BROWSER_HEADLESS:-false}
 
 # Tool-call/turn budget for the defect-detection agent. Read by both the baseline
 # and hints gold agents, so keep it identical across A/B runs. The agent's stated

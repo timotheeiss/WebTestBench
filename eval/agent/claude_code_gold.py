@@ -10,7 +10,7 @@ from claude_agent_sdk import (
     TextBlock, ToolUseBlock, ToolResultBlock
 )
 
-from agent import APIConfig, BaseAgent
+from agent import APIConfig, BaseAgent, browser_headless
 from prompt import USER_PROMPT
 from tools import PlaywrightTools
 from utils import *
@@ -500,24 +500,30 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
         max_turns: int = 5,
         max_buffer_size: int = 1024*1024,
     ) -> ClaudeAgentOptions:
+        playwright_args = [
+            "-y", "@playwright/mcp@0.0.76",
+            "--isolated",
+            # Use Playwright's bundled Chromium (already installed via
+            # `npx playwright install chromium`). Without this, the MCP
+            # defaults to the "chrome" channel and fails on hosts where
+            # Google Chrome isn't installed. It also matches the engine
+            # the hints variant launches (chromium.launch()), keeping the
+            # A/B comparison on the same browser.
+            "--browser", "chromium",
+            "--viewport-size", "1280,720",
+        ]
+        # The MCP is headed by default, so this flag is what keeps the baseline
+        # arm's browser mode tied to the hints arm's. Same knob, both conditions.
+        if browser_headless():
+            playwright_args.append("--headless")
+
         return ClaudeAgentOptions(
             system_prompt=system_prompt,
             mcp_servers={
                 "playwright": {
                     "type": "stdio",
                     "command": "npx",
-                    "args": [
-                        "-y", "@playwright/mcp@0.0.76",
-                        "--isolated",
-                        # Use Playwright's bundled Chromium (already installed via
-                        # `npx playwright install chromium`). Without this, the MCP
-                        # defaults to the "chrome" channel and fails on hosts where
-                        # Google Chrome isn't installed. It also matches the engine
-                        # the hints variant launches (chromium.launch()), keeping the
-                        # A/B comparison on the same browser.
-                        "--browser", "chromium",
-                        "--viewport-size", "1280,720",
-                    ]
+                    "args": playwright_args,
                 }
             },
             allowed_tools=PlaywrightTools,

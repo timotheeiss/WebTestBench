@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from claude_agent_sdk import ClaudeAgentOptions
 
+from agent import browser_headless
 from agent.claude_code_gold import ClaudeCodeWebTester_Gold
 from tools import PlaywrightTools
 from utils import *
@@ -50,9 +51,9 @@ class ClaudeCodeWebTester_GoldHints(ClaudeCodeWebTester_Gold):
         offset = int(os.environ.get("SEMANTIC_HINTS_CDP_PORT_OFFSET", "20000"))
         self._cdp_port = (server_port + offset) % 65535 or 29222
         self._cdp_endpoint = f"http://127.0.0.1:{self._cdp_port}"
-        # Default to a visible (headed) browser so the run can be watched on screen.
-        # Set SEMANTIC_HINTS_HEADLESS=true to force headless (e.g. on a display-less host).
-        self._headless = (os.environ.get("SEMANTIC_HINTS_HEADLESS", "false").lower() == "true")
+        # Same knob as the baseline arm's Playwright MCP — see browser_headless().
+        # Headless by default; BROWSER_HEADLESS=false to watch the run on screen.
+        self._headless = browser_headless()
         self._cdp_proc: Optional[subprocess.Popen] = None
 
     # ------------------------------------------------------------------ #

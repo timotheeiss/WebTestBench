@@ -413,6 +413,10 @@ class ClaudeCodeWebTester(BaseAgent):
                         # Chrome isn't installed.
                         "--browser", "chromium",
                         "--viewport-size", "1280,720",
+                        # Restored to upstream's behaviour. This path is legacy
+                        # (two-stage tester) and not part of the A/B, so it takes
+                        # the flag unconditionally rather than BROWSER_HEADLESS.
+                        "--headless",
                     ]
                 }
             },

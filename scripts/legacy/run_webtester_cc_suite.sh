@@ -43,7 +43,7 @@ BASE_PORT=${BASE_PORT:-6000}
 # Identical tool/turn budget for both variants -> apples-to-apples.
 export DEFECT_MAX_TURNS=${DEFECT_MAX_TURNS:-200}
 # Visible browser. Set to "true" only on a display-less host.
-export SEMANTIC_HINTS_HEADLESS=${SEMANTIC_HINTS_HEADLESS:-false}
+export BROWSER_HEADLESS=${BROWSER_HEADLESS:-false}
 export ANTHROPIC_DEFAULT_SONNET_MODEL=$MODEL
 export ANTHROPIC_DEFAULT_OPUS_MODEL=$MODEL
 export ANTHROPIC_DEFAULT_HAIKU_MODEL=$MODEL
@@ -150,7 +150,7 @@ run_variant() {  # $1 variant-name  $2 agent  $3 project_root  $4 version-suffix
 # ======================================================================
 NAPPS=$(echo $APPS | wc -w | tr -d ' ')
 echo "Suite plan: apps [$APPS] × $REPS reps × 2 variants = $(( NAPPS * REPS * 2 )) runs"
-echo "Model: $MODEL   Visible browser: headless=$SEMANTIC_HINTS_HEADLESS   Turn budget: $DEFECT_MAX_TURNS"
+echo "Model: $MODEL   Visible browser: headless=$BROWSER_HEADLESS   Turn budget: $DEFECT_MAX_TURNS"
 
 run_variant "baseline" "claude_code_gold"       "$BASELINE_ROOT" "gold"
 run_variant "hints"    "claude_code_gold_hints" "$HINTS_ROOT"    "gold-hints"
