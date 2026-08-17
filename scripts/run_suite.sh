@@ -103,6 +103,15 @@ RUN_ID=${RUN_ID:-"$(date +%Y-%m-%d)_${MODEL_SLUG}${SCREENSHOT_SLUG}"}
 
 # Identical tool/turn budget for both conditions.
 export DEFECT_MAX_TURNS=${DEFECT_MAX_TURNS:-200}
+# Reasoning effort is deliberately explicit so it cannot silently inherit a
+# developer's personal Claude Code setting. The SDK forwards this to Claude
+# Code as `--effort`; models that do not support a requested level apply their
+# own documented fallback.
+export EFFORT=${EFFORT:-high}
+case "$EFFORT" in
+  low|medium|high|xhigh|max) ;;
+  *) echo "❌ EFFORT must be low, medium, high, xhigh, or max (got '$EFFORT')"; exit 1 ;;
+esac
 # Headless for BOTH conditions (upstream WebTestBench's behaviour, and the only
 # mode a display-less host supports). One knob drives both arms — see
 # eval/agent/base_agent.py:browser_headless(). Set false to watch a run locally.
@@ -226,6 +235,7 @@ cfg = {
     "reps": int("$REPS"),
     "base_port": int("$BASE_PORT"),
     "defect_max_turns": int("$DEFECT_MAX_TURNS"),
+    "requested_effort": "$EFFORT",
     "headless": "$BROWSER_HEADLESS",
     "screenshot_modes": {
         "baseline": "$BASELINE_SCREENSHOTS",
@@ -276,7 +286,7 @@ run_condition() {  # $1 name  $2 agent  $3 project_root  $4 screenshot mode
 NAPPS=$(echo $APPS | wc -w | tr -d ' ')
 echo "Suite plan: run-id=$RUN_ID  apps [$APPS] × $REPS reps × $NCONDS condition(s) [$CONDITIONS] = $(( NAPPS * REPS * NCONDS )) app-runs"
 [ "$NCONDS" -lt 2 ] && echo "⚠️  Single condition — this run alone is not an A/B comparison."
-echo "Model: $MODEL   auth: $AUTH_MODE   headless=$BROWSER_HEADLESS   turn budget: $DEFECT_MAX_TURNS"
+echo "Model: $MODEL   auth: $AUTH_MODE   effort=$EFFORT   headless=$BROWSER_HEADLESS   turn budget: $DEFECT_MAX_TURNS"
 echo "Screenshots: baseline=$BASELINE_SCREENSHOTS   hints=$HINTS_SCREENSHOTS"
 [ "$AUTH_MODE" = "subscription" ] && echo "⚠️  Subscription auth: rate limits can distort latency — not for measured runs."
 

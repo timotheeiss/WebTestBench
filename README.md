@@ -176,7 +176,7 @@ export ANTHROPIC_DEFAULT_HAIKU_MODEL="$MODEL"
 #### The A/B pipeline (this fork)
 
 ```bash
-# 1. Run baseline + hints over apps 0001–0005 (env-overridable: RUN_ID, APPS, REPS, MODEL)
+# 1. Run baseline + hints over apps 0001–0005 (env-overridable: RUN_ID, APPS, REPS, MODEL, EFFORT)
 bash scripts/run_suite.sh
 #    -> ../experiments/runs/<run-id>/{baseline,hints}/WebTestBench_00XX/rep<r>/
 

@@ -583,6 +583,7 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
             allowed_tools=playwright_tools(self.allow_screenshots),
             disallowed_tools=([] if self.allow_screenshots else [PLAYWRIGHT_SCREENSHOT_TOOL]),
             model=self.api_config.model,
+            effort=os.environ.get("EFFORT", "high"),
             max_turns=max_turns,
             max_buffer_size=effective_buffer_size,
             cwd=self.cwd_dir,
