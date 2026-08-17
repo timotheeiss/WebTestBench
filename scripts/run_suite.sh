@@ -76,10 +76,30 @@ for c in $CONDITIONS; do
 done
 NCONDS=$(echo $CONDITIONS | wc -w | tr -d ' ')
 
+# Screenshot access is condition-specific so the same suite can run a
+# vision-enabled baseline against a hint-only agent, or enable vision for both.
+# SCREENSHOTS is the shared default; either condition can override it.
+SCREENSHOTS=${SCREENSHOTS:-disabled}
+BASELINE_SCREENSHOTS=${BASELINE_SCREENSHOTS:-$SCREENSHOTS}
+HINTS_SCREENSHOTS=${HINTS_SCREENSHOTS:-$SCREENSHOTS}
+for mode in "$BASELINE_SCREENSHOTS" "$HINTS_SCREENSHOTS"; do
+  case "$mode" in
+    enabled|disabled) ;;
+    *) echo "❌ screenshot modes must be 'enabled' or 'disabled' (got '$mode')"; exit 1 ;;
+  esac
+done
+
 # Canonical model slug: lowercase, '.'/'/' -> '-', drop leading 'claude-'.
 MODEL_SLUG=$(printf '%s' "${MODEL##*/}" | tr '[:upper:]' '[:lower:]' | tr './' '--' | sed 's/^claude-//')
 # run-id: date + intent slug. Default slug is the model; override RUN_ID for a purpose.
-RUN_ID=${RUN_ID:-"$(date +%Y-%m-%d)_${MODEL_SLUG}"}
+SCREENSHOT_SLUG=""
+for c in $CONDITIONS; do
+  if { [ "$c" = "baseline" ] && [ "$BASELINE_SCREENSHOTS" = "enabled" ]; } || \
+     { [ "$c" = "hints" ] && [ "$HINTS_SCREENSHOTS" = "enabled" ]; }; then
+    SCREENSHOT_SLUG="_vision"
+  fi
+done
+RUN_ID=${RUN_ID:-"$(date +%Y-%m-%d)_${MODEL_SLUG}${SCREENSHOT_SLUG}"}
 
 # Identical tool/turn budget for both conditions.
 export DEFECT_MAX_TURNS=${DEFECT_MAX_TURNS:-200}
@@ -153,8 +173,16 @@ PY
 import json, hashlib, subprocess, time, os
 
 KNOWN = {
-    "baseline": {"agent": "claude_code_gold",       "project_root": "$BASELINE_ROOT"},
-    "hints":    {"agent": "claude_code_gold_hints",  "project_root": "$HINTS_ROOT"},
+    "baseline": {
+        "agent": "claude_code_gold",
+        "project_root": "$BASELINE_ROOT",
+        "screenshots": "$BASELINE_SCREENSHOTS",
+    },
+    "hints": {
+        "agent": "claude_code_gold_hints",
+        "project_root": "$HINTS_ROOT",
+        "screenshots": "$HINTS_SCREENSHOTS",
+    },
 }
 selected = "$CONDITIONS".split()
 # This run's conditions, UNIONed with any already recorded for this run-id:
@@ -167,6 +195,14 @@ try:
 except Exception:
     pass
 for _c in selected:
+    previous = conditions.get(_c) or {}
+    previous_mode = previous.get("screenshots", "disabled")
+    next_mode = KNOWN[_c]["screenshots"]
+    if previous and previous_mode != next_mode:
+        raise SystemExit(
+            f"refusing to mix screenshot modes in condition {_c!r}: "
+            f"existing={previous_mode!r}, requested={next_mode!r}; choose a new RUN_ID"
+        )
     conditions[_c] = KNOWN[_c]
 
 def sha(path):
@@ -191,6 +227,10 @@ cfg = {
     "base_port": int("$BASE_PORT"),
     "defect_max_turns": int("$DEFECT_MAX_TURNS"),
     "headless": "$BROWSER_HEADLESS",
+    "screenshot_modes": {
+        "baseline": "$BASELINE_SCREENSHOTS",
+        "hints": "$HINTS_SCREENSHOTS",
+    },
     "dataset": "$DATASET",
     "conditions": conditions,
     "git_sha": {"webtestbench": sha("."), "semantic_hints_mcp": sha("$MCP_DIR")},
@@ -205,8 +245,8 @@ PY
 # ======================================================================
 declare -a FAILURES
 
-run_condition() {  # $1 name  $2 agent  $3 project_root
-  local cond="$1" agent="$2" root="$3"
+run_condition() {  # $1 name  $2 agent  $3 project_root  $4 screenshot mode
+  local cond="$1" agent="$2" root="$3" screenshots="$4"
   echo
   echo "================================================================"
   echo "==  CONDITION: $cond   (agent=$agent, root=$root)"
@@ -224,6 +264,7 @@ run_condition() {  # $1 name  $2 agent  $3 project_root
         --version "$cond" \
         --rep "rep$r" \
         --base_port "$BASE_PORT" \
+        --screenshots "$screenshots" \
         --auth_mode "$AUTH_MODE" \
         ${API_BASE_URL:+--api_base_url "$API_BASE_URL"} \
         ${API_KEY:+--api_key "$API_KEY"} \
@@ -236,12 +277,13 @@ NAPPS=$(echo $APPS | wc -w | tr -d ' ')
 echo "Suite plan: run-id=$RUN_ID  apps [$APPS] × $REPS reps × $NCONDS condition(s) [$CONDITIONS] = $(( NAPPS * REPS * NCONDS )) app-runs"
 [ "$NCONDS" -lt 2 ] && echo "⚠️  Single condition — this run alone is not an A/B comparison."
 echo "Model: $MODEL   auth: $AUTH_MODE   headless=$BROWSER_HEADLESS   turn budget: $DEFECT_MAX_TURNS"
+echo "Screenshots: baseline=$BASELINE_SCREENSHOTS   hints=$HINTS_SCREENSHOTS"
 [ "$AUTH_MODE" = "subscription" ] && echo "⚠️  Subscription auth: rate limits can distort latency — not for measured runs."
 
 for cond in $CONDITIONS; do
   case "$cond" in
-    baseline) run_condition "baseline" "claude_code_gold"       "$BASELINE_ROOT" ;;
-    hints)    run_condition "hints"    "claude_code_gold_hints" "$HINTS_ROOT" ;;
+    baseline) run_condition "baseline" "claude_code_gold"       "$BASELINE_ROOT" "$BASELINE_SCREENSHOTS" ;;
+    hints)    run_condition "hints"    "claude_code_gold_hints" "$HINTS_ROOT"    "$HINTS_SCREENSHOTS" ;;
   esac
 done
 

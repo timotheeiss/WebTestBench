@@ -8,6 +8,8 @@ Usage:
 
 - Pairs each tool_use (browser_*) with its tool_result.
 - For browser_snapshot, the tool_result IS the accessibility tree the model received.
+- For browser_take_screenshot, records image metadata and any saved-file path;
+  inline base64 bytes are deliberately omitted from the text report.
 - Without --full, snapshots are truncated for readability; with --full, printed whole.
 - By default the report is written next to the run's session_meta.json
   (e.g. experiments/runs/<run-id>/<condition>/<app>/<rep>/agent_view.txt), resolved
@@ -52,7 +54,19 @@ def text_of(content) -> str:
         parts = []
         for b in content:
             if isinstance(b, dict):
-                parts.append(b.get("text") or b.get("content") or json.dumps(b)[:200])
+                if b.get("type") == "image":
+                    source = b.get("source") if isinstance(b.get("source"), dict) else {}
+                    data = source.get("data") or b.get("data")
+                    media_type = (
+                        source.get("media_type")
+                        or b.get("mimeType")
+                        or b.get("media_type")
+                        or "unknown"
+                    )
+                    size = len(data) if isinstance(data, str) else "unknown"
+                    parts.append(f"<image media_type={media_type} base64_chars={size}>")
+                else:
+                    parts.append(b.get("text") or b.get("content") or json.dumps(b)[:200])
             else:
                 parts.append(str(b))
         return "\n".join(parts)
@@ -107,14 +121,18 @@ def main():
         print(s, file=out)
 
     snap_n = 0
+    screenshot_n = 0
     w(f"# Transcript: {path}")
     w(f"# total tool calls: {len(tool_uses)}\n")
     for i, (tid, name, inp) in enumerate(tool_uses, 1):
         short = name.replace("mcp__playwright__", "")
         res = results.get(tid, "<no result captured>")
         is_snap = name.endswith("browser_snapshot")
+        is_screenshot = name.endswith("browser_take_screenshot")
         if is_snap:
             snap_n += 1
+        if is_screenshot:
+            screenshot_n += 1
         head = f"[{i:02d}] {short}"
         if inp:
             head += f"  input={json.dumps(inp, ensure_ascii=False)[:160]}"
@@ -125,9 +143,13 @@ def main():
         w(body)
         w()
     w(f"\n# accessibility snapshots seen by the agent: {snap_n}")
+    w(f"# screenshots seen by the agent: {screenshot_n}")
     if out_path:
         out.close()
-        print(f"Wrote report to {out_path}  (snapshots: {snap_n}, tool calls: {len(tool_uses)})")
+        print(
+            f"Wrote report to {out_path}  "
+            f"(snapshots: {snap_n}, screenshots: {screenshot_n}, tool calls: {len(tool_uses)})"
+        )
 
 
 if __name__ == "__main__":

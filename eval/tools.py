@@ -1,5 +1,8 @@
 # https://github.com/microsoft/playwright-mcp
 
+PLAYWRIGHT_SCREENSHOT_TOOL = "mcp__playwright__browser_take_screenshot"
+
+
 PlaywrightTools = [
     ## Browser navigation & window control
     "mcp__playwright__browser_navigate",          # Navigate to a URL
@@ -19,7 +22,6 @@ PlaywrightTools = [
 
     ## Page inspection
     "mcp__playwright__browser_snapshot",  # Capture accessibility snapshot of the current page, this is better than screenshot
-    # "mcp__playwright__browser_take_screenshot",  # Take a screenshot of the current page. You can't perform actions based on the screenshot, use browser_snapshot for actions.
     "mcp__playwright__browser_console_messages",  # Returns all console messages
     "mcp__playwright__browser_network_requests",  # Returns all network requests since loading the page
     
@@ -52,3 +54,10 @@ PlaywrightTools = [
     "mcp__playwright__browser_verify_text_visible",     # Verify text is visible on the page. Prefer browser_verify_element_visible if possible.
     "mcp__playwright__browser_verify_value",            # Verify element value
 ]
+
+
+def playwright_tools(allow_screenshots: bool = False) -> list[str]:
+    """Return the live Playwright tool allowlist for one run."""
+    if allow_screenshots:
+        return PlaywrightTools + [PLAYWRIGHT_SCREENSHOT_TOOL]
+    return list(PlaywrightTools)

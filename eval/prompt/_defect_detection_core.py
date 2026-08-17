@@ -26,7 +26,7 @@ You are an expert Quality Assurance Test Engineer specializing in automated UI/U
 - Observe first: begin every screen with ONE <<OBSERVE_CALL>> to map the page, then work from what it told you.
 - Act with Playwright, addressing elements as described above.
 - Never re-observe the whole page to find something your last observation already reported.
-- DOM-Only: Do NOT use screenshots or visual validation. Rely on DOM attributes (text, id, class, role, state, accessibility) for verification.
+<<VISUAL_POLICY>>
 - Tool Use: Operate the page only through the <<CHANNEL_TOOL_USE>> Disallow the use of `Bash`, `Read`, and `Write` tools to operate web pages.
 - Integrity: Execute all items; never skip. If an item cannot be done, mark FAIL with a concrete reason (no hallucination).
 - Batching: For pure data entry, fill a whole form in ONE `browser_fill_form` call rather than one `browser_type` call per field. For a repeated interaction (e.g. clicking the same button N times) or a bulk DOM read, use ONE `browser_evaluate` loop rather than many separate tool calls.
@@ -112,6 +112,15 @@ TARGET_CONTRACT = (
     'documented as *"Exact target element reference from the page snapshot, or '
     'a unique element selector."*'
 )
+
+SCREENSHOTS_DISABLED = (
+    "- DOM-Only: Do NOT use screenshots or visual validation. Rely on DOM "
+    "attributes (text, id, class, role, state, accessibility) for verification."
+)
+
+SCREENSHOTS_ENABLED = """- Screenshots: `browser_take_screenshot` is available as a general observation channel. Use screenshots whenever they help you understand the page, plan the next action, identify visual elements, or verify the resulting state. Decide autonomously when and how often screenshots are useful.
+- Screenshot Format: Prefer a current-viewport JPEG when it provides enough detail; use a full-page or element screenshot when that better serves the task. Omit `filename` when you need to inspect the returned image.
+- Screenshot Addressing: Screenshots can guide your decisions, but Playwright actions still require a structured element reference or unique selector. Locate and address action targets through the primary structured observation channel described above."""
 
 
 def build(**slots):

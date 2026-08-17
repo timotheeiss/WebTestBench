@@ -2,7 +2,12 @@
 
 Everything not specific to that channel lives in _defect_detection_core.
 """
-from ._defect_detection_core import TARGET_CONTRACT, build
+from ._defect_detection_core import (
+    SCREENSHOTS_DISABLED,
+    SCREENSHOTS_ENABLED,
+    TARGET_CONTRACT,
+    build,
+)
 
 CHANNEL_INTRO = (
     "You perceive the page through the **Playwright MCP**'s accessibility "
@@ -39,4 +44,15 @@ PROMPT_DEFECT_DETECTION_BASED_GOLD = build(
     observe_call="`browser_snapshot`",
     channel_tool_use="**Playwright MCP**.",
     channel_extra_rules="",
+    visual_policy=SCREENSHOTS_DISABLED,
+)
+
+PROMPT_DEFECT_DETECTION_BASED_GOLD_WITH_SCREENSHOTS = build(
+    channel_intro=CHANNEL_INTRO,
+    channel_observe=CHANNEL_OBSERVE,
+    channel_addressing=CHANNEL_ADDRESSING,
+    observe_call="`browser_snapshot`",
+    channel_tool_use="**Playwright MCP**.",
+    channel_extra_rules="",
+    visual_policy=SCREENSHOTS_ENABLED,
 )

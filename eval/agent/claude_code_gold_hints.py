@@ -9,8 +9,11 @@ from urllib.parse import urlparse
 from claude_agent_sdk import ClaudeAgentOptions
 
 from agent import browser_headless
-from agent.claude_code_gold import ClaudeCodeWebTester_Gold
-from tools import PlaywrightTools
+from agent.claude_code_gold import (
+    SCREENSHOT_MAX_BUFFER_SIZE,
+    ClaudeCodeWebTester_Gold,
+)
+from tools import PLAYWRIGHT_SCREENSHOT_TOOL, playwright_tools
 from utils import *
 
 
@@ -38,7 +41,11 @@ class ClaudeCodeWebTester_GoldHints(ClaudeCodeWebTester_Gold):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
 
-        self.defect_prompt_key = "defect_detection_based_gold_with_hints"
+        self.defect_prompt_key = (
+            "defect_detection_based_gold_with_hints_and_screenshots"
+            if self.allow_screenshots
+            else "defect_detection_based_gold_with_hints"
+        )
 
         # Location of the built semantic-hints MCP (override with SEMANTIC_HINTS_MCP_DIR).
         default_mcp_dir = Path(__file__).resolve().parents[3] / "semantic-hints-mcp"
@@ -159,6 +166,21 @@ class ClaudeCodeWebTester_GoldHints(ClaudeCodeWebTester_Gold):
         max_turns: int = 5,
         max_buffer_size: int = 1024 * 1024,
     ) -> ClaudeAgentOptions:
+        playwright_args = [
+            "-y", "@playwright/mcp@0.0.76",
+            "--cdp-endpoint", self._cdp_endpoint,
+            "--viewport-size", "1280,720",
+        ]
+        effective_buffer_size = max_buffer_size
+        if self.allow_screenshots:
+            screenshot_dir = (self.output_dir / "playwright").resolve()
+            screenshot_dir.mkdir(parents=True, exist_ok=True)
+            playwright_args.extend([
+                "--image-responses", "allow",
+                "--output-dir", str(screenshot_dir),
+            ])
+            effective_buffer_size = max(max_buffer_size, SCREENSHOT_MAX_BUFFER_SIZE)
+
         return ClaudeAgentOptions(
             system_prompt=system_prompt,
             mcp_servers={
@@ -166,11 +188,7 @@ class ClaudeCodeWebTester_GoldHints(ClaudeCodeWebTester_Gold):
                 "playwright": {
                     "type": "stdio",
                     "command": "npx",
-                    "args": [
-                        "-y", "@playwright/mcp@0.0.76",
-                        "--cdp-endpoint", self._cdp_endpoint,
-                        "--viewport-size", "1280,720",
-                    ],
+                    "args": playwright_args,
                 },
                 # Semantic-hints MCP reads data-semtag-* hints from the SAME browser.
                 SEMANTIC_HINTS_SERVER: {
@@ -183,13 +201,11 @@ class ClaudeCodeWebTester_GoldHints(ClaudeCodeWebTester_Gold):
                     },
                 },
             },
-            allowed_tools=PlaywrightTools + SemanticHintsTools,
-            disallowed_tools=[
-                "mcp__playwright__browser_take_screenshot",
-            ],
+            allowed_tools=playwright_tools(self.allow_screenshots) + SemanticHintsTools,
+            disallowed_tools=([] if self.allow_screenshots else [PLAYWRIGHT_SCREENSHOT_TOOL]),
             model=self.api_config.model,
             max_turns=max_turns,
-            max_buffer_size=max_buffer_size,
+            max_buffer_size=effective_buffer_size,
             cwd=self.cwd_dir,
             env=self.api_config.agent_env(),
         )

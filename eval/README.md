@@ -10,12 +10,12 @@ the map of which code path is actually exercised.
 
 | File | Role |
 |---|---|
-| `run_agent.py` | Entrypoint. `--output_root/--version` set the run leaf; app dirs written under it. Driven by `scripts/run_suite.sh`. |
+| `run_agent.py` | Entrypoint. `--output_root/--version` set the run leaf; `--screenshots enabled|disabled` controls optional visual evidence. Driven by `scripts/run_suite.sh`. |
 | `agent/base_agent.py` | Shared agent: dev-server deploy/teardown, SDK loop, `session_meta.json`. |
 | `agent/claude_code_gold.py` | **baseline** agent — materializes the gold checklist from the record, then defect-detects reading the accessibility tree. |
 | `agent/claude_code_gold_hints.py` | **hints** agent — subclass of the above, adds the semantic-hints MCP. |
-| `prompt/defect_detection_based_gold.py` | baseline defect-detection prompt (`defect_detection_based_gold`). |
-| `prompt/defect_detection_based_gold_with_hints.py` | hints defect-detection prompt (`..._with_hints`). |
+| `prompt/defect_detection_based_gold.py` | baseline defect-detection prompts, with DOM-only and screenshot-enabled variants. |
+| `prompt/defect_detection_based_gold_with_hints.py` | hints defect-detection prompts, with hint-only and screenshot-enabled variants. |
 | `scoring_oracle.py` | Deterministic id-alignment scorer (no judge model). Driven by `scripts/score_suite.sh`. |
 | `tools.py`, `utils.py` | Shared helpers. |
 

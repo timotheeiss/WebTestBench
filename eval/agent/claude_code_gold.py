@@ -12,8 +12,37 @@ from claude_agent_sdk import (
 
 from agent import APIConfig, BaseAgent, browser_headless
 from prompt import USER_PROMPT
-from tools import PlaywrightTools
+from tools import PLAYWRIGHT_SCREENSHOT_TOOL, playwright_tools
 from utils import *
+
+
+SCREENSHOT_MAX_BUFFER_SIZE = 8 * 1024 * 1024
+
+
+def image_safe_content(value: Any) -> Any:
+    """Replace inline image bytes with metadata before writing the event log."""
+    if isinstance(value, list):
+        return [image_safe_content(item) for item in value]
+    if not isinstance(value, dict):
+        return value
+
+    if value.get("type") == "image":
+        source = value.get("source") if isinstance(value.get("source"), dict) else {}
+        data = source.get("data") or value.get("data")
+        media_type = (
+            source.get("media_type")
+            or value.get("mimeType")
+            or value.get("media_type")
+            or "unknown"
+        )
+        return {
+            "type": "image",
+            "media_type": media_type,
+            "base64_chars": len(data) if isinstance(data, str) else None,
+            "data_omitted_from_event_log": True,
+        }
+
+    return {key: image_safe_content(item) for key, item in value.items()}
 
 
 class ClaudeCodeWebTester_Gold(BaseAgent):
@@ -42,6 +71,7 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
         self.session_success = True
         self.recent_assistant_text_blocks: Dict[str, List[str]] = {}
         self.record = kwargs.get("record")
+        self.allow_screenshots = bool(kwargs.get("allow_screenshots", False))
         # defect detection stage setting
         # Tool-call/turn budget for the defect-detection agent. Configurable via
         # DEFECT_MAX_TURNS so baseline and hints runs can share the same budget
@@ -53,7 +83,11 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
         self.max_turns = self.defect_max_turns + 50
         # Prompt used for the defect-detection stage. Subclasses (e.g. the
         # hints-enabled tester) override this to swap in a different prompt.
-        self.defect_prompt_key = "defect_detection_based_gold"
+        self.defect_prompt_key = (
+            "defect_detection_based_gold_with_screenshots"
+            if self.allow_screenshots
+            else "defect_detection_based_gold"
+        )
 
         self.cwd_dir = "./claude_code_cwd"
         os.makedirs(self.cwd_dir, exist_ok=True)
@@ -187,7 +221,13 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
         num_turns = 0
         try:
             async for message in query(prompt=prompt, options=options):
-                self._log_session_id(message, session_name=stage, stage=stage, prompt=prompt)
+                self._log_session_id(
+                    message,
+                    session_name=stage,
+                    stage=stage,
+                    prompt=prompt,
+                    extra_meta={"screenshots_enabled": self.allow_screenshots},
+                )
                 self._handle_message(message, stage=stage)
                 if isinstance(message, ResultMessage):
                     result_message = message.result
@@ -309,7 +349,11 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
                     self._emit_event(
                         type_name="message",
                         stage=stage,
-                        payload=dict(role="user", type="user_tool_result", content=block.content)
+                        payload=dict(
+                            role="user",
+                            type="user_tool_result",
+                            content=image_safe_content(block.content),
+                        )
                     )
         elif isinstance(message, AssistantMessage):
             for block in message.content:
@@ -517,6 +561,16 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
         if browser_headless():
             playwright_args.append("--headless")
 
+        effective_buffer_size = max_buffer_size
+        if self.allow_screenshots:
+            screenshot_dir = (self.output_dir / "playwright").resolve()
+            screenshot_dir.mkdir(parents=True, exist_ok=True)
+            playwright_args.extend([
+                "--image-responses", "allow",
+                "--output-dir", str(screenshot_dir),
+            ])
+            effective_buffer_size = max(max_buffer_size, SCREENSHOT_MAX_BUFFER_SIZE)
+
         return ClaudeAgentOptions(
             system_prompt=system_prompt,
             mcp_servers={
@@ -526,13 +580,11 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
                     "args": playwright_args,
                 }
             },
-            allowed_tools=PlaywrightTools,
-            disallowed_tools=[
-                "mcp__playwright__browser_take_screenshot",
-            ],
+            allowed_tools=playwright_tools(self.allow_screenshots),
+            disallowed_tools=([] if self.allow_screenshots else [PLAYWRIGHT_SCREENSHOT_TOOL]),
             model=self.api_config.model,
             max_turns=max_turns,
-            max_buffer_size=max_buffer_size,
+            max_buffer_size=effective_buffer_size,
             cwd=self.cwd_dir,
             env=self.api_config.agent_env(),
         )

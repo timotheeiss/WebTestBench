@@ -2,7 +2,12 @@
 
 Everything not specific to that channel lives in _defect_detection_core.
 """
-from ._defect_detection_core import TARGET_CONTRACT, build
+from ._defect_detection_core import (
+    SCREENSHOTS_DISABLED,
+    SCREENSHOTS_ENABLED,
+    TARGET_CONTRACT,
+    build,
+)
 
 CHANNEL_INTRO = (
     "This application has been annotated with **semantic hints** "
@@ -64,4 +69,18 @@ PROMPT_DEFECT_DETECTION_BASED_GOLD_WITH_HINTS = build(
         "fallback inspection) and the **Semantic Hints MCP** (observation)."
     ),
     channel_extra_rules=CHANNEL_EXTRA_RULES,
+    visual_policy=SCREENSHOTS_DISABLED,
+)
+
+PROMPT_DEFECT_DETECTION_BASED_GOLD_WITH_HINTS_AND_SCREENSHOTS = build(
+    channel_intro=CHANNEL_INTRO,
+    channel_observe=CHANNEL_OBSERVE,
+    channel_addressing=CHANNEL_ADDRESSING,
+    observe_call="`semantic_snapshot`",
+    channel_tool_use=(
+        "**Playwright MCP** (actions / visual evidence / "
+        "fallback inspection) and the **Semantic Hints MCP** (observation)."
+    ),
+    channel_extra_rules=CHANNEL_EXTRA_RULES,
+    visual_policy=SCREENSHOTS_ENABLED,
 )

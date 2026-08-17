@@ -78,6 +78,15 @@ def parse_args() -> argparse.Namespace:
                         help="Repetition label; results are written per app under <app>/<rep>/.")
     parser.add_argument("--base_port", type=int, default=6000,
                         help="Base port offset for local servers (port = base_port + int(record_id[-4:])).")
+    parser.add_argument(
+        "--screenshots",
+        choices=["enabled", "disabled"],
+        default="disabled",
+        help=(
+            "Allow the live gold agent to use Playwright screenshots as optional "
+            "visual evidence (default: disabled)."
+        ),
+    )
 
     parser.add_argument("--auth_mode", type=str, default="api",
                         choices=["api", "subscription"],
@@ -133,6 +142,7 @@ async def _run_record(
             local_project_dir=local_project_dir,
             output_dir=output_dir,
             event_log_stream=None,
+            allow_screenshots=args.screenshots == "enabled",
         )
         if probe_agent.result_path.exists():
             return
@@ -151,6 +161,7 @@ async def _run_record(
             f"Server URL: {server_url}\n"
             f"Output Dir: {output_dir}\n"
             f"Log Dir: {log_dir}"
+            f"\nScreenshots: {args.screenshots}"
         )
         print_boxed(running_info)
 
@@ -162,6 +173,7 @@ async def _run_record(
             output_dir=output_dir,
             event_log_stream=log_f,
             record=record,
+            allow_screenshots=args.screenshots == "enabled",
         )
         await agent.run()
 

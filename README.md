@@ -63,7 +63,7 @@ claude
 /exit
 
 # Add Playwright MCP server to Claude Code
-claude mcp add playwright npx @playwright/mcp@0.0.61  # Do not use @playwright/mcp@latest
+claude mcp add playwright npx @playwright/mcp@0.0.76  # Keep this aligned with the live agents
 npx playwright install
 
 # Claude Agent SDK (already included in requirements.txt)
@@ -81,9 +81,10 @@ claude mcp list
 ```
 Example Output:
 ```
-playwright: npx @playwright/mcp@0.0.61 - ✓ Connected
+playwright: npx @playwright/mcp@0.0.76 - ✓ Connected
 ```
-If you change the Playwright MCP version, make sure to update the corresponding version in `eval/agent/claude_code.py` (specifically in ClaudeAgentOptions) to keep them consistent.
+If you change the Playwright MCP version, update both live gold-agent configurations
+under `eval/agent/` so the baseline and hints conditions stay aligned.
 
 **3) Configure OpenRouter for API Models**
 
@@ -179,6 +180,11 @@ export ANTHROPIC_DEFAULT_HAIKU_MODEL="$MODEL"
 bash scripts/run_suite.sh
 #    -> ../experiments/runs/<run-id>/{baseline,hints}/WebTestBench_00XX/rep<r>/
 
+# Optional visual conditions. Values are "enabled" or "disabled".
+SCREENSHOTS=enabled bash scripts/run_suite.sh                 # both conditions
+BASELINE_SCREENSHOTS=enabled bash scripts/run_suite.sh       # vision baseline vs hint-only
+HINTS_SCREENSHOTS=enabled bash scripts/run_suite.sh          # DOM baseline vs hinted + vision
+
 # 2. Score every condition/rep leaf with the deterministic oracle scorer
 bash scripts/score_suite.sh <run-id>
 
@@ -188,13 +194,16 @@ python ../experiments/analysis/aggregate.py --run_dir ../experiments/runs/<run-i
 ```
 
 Each run writes a `run_config.json` manifest (model, apps, reps, turn budget,
-git SHAs) so it is reproducible from that file alone.
+per-condition screenshot modes, git SHAs) so it is reproducible from that file
+alone. Screenshot access is disabled by default. When enabled, screenshots are
+optional visual evidence; the agents still use accessibility refs or semantic
+selectors to address elements.
 
 ### Scripts overview (`scripts/`)
 
 | Script | What it does |
 | --- | --- |
-| `run_suite.sh` | A/B suite: baseline + hints over `APPS` × `REPS`, one run-id, visible browser. Writes `../experiments/runs/<run-id>/` + `run_config.json`. |
+| `run_suite.sh` | A/B suite: baseline + hints over `APPS` × `REPS`, one run-id, with independently configurable screenshot access. Writes `../experiments/runs/<run-id>/` + `run_config.json`. |
 | `score_suite.sh <run-id>` | Score every `<condition>/rep<r>` leaf of a run with the oracle scorer (`eval/scoring_oracle.py`). |
 | `dump_suite.sh <run-id> [--full]` | Re-dump `agent_view.txt` for every app-rep of a run (e.g. with `--full`, or for archived runs). Note: `run_suite.sh` already dumps it automatically per app — this is for re-generating. |
 | `dump_agent_view.py` | Replay ONE run's SDK session transcript to dump exactly what the agent saw (accessibility tree / hints) and did (tool calls). Auto-writes `agent_view.txt` next to that run's `session_meta.json`; `--stdout` / `--out` / `--full` to override. |
