@@ -78,6 +78,41 @@ def scrub_routing_env() -> None:
 StageStatus = Literal["running", "complete", "skip", "error"]
 
 
+@dataclass
+class ChecklistResultItem:
+    """One required checklist item, as defined by checklist.md."""
+
+    item_id: str
+    description: str
+    section: str
+
+
+@dataclass
+class ResultParseResult:
+    """The outcome of validating an agent's final checklist report."""
+
+    canonical_result: str = ""
+    raw_content: str = ""
+    missing_ids: list[str] | None = None
+    duplicate_ids: list[str] | None = None
+    unknown_ids: list[str] | None = None
+    emitted_count: int = 0
+
+    @property
+    def is_valid(self) -> bool:
+        return bool(self.canonical_result)
+
+    @property
+    def failure_kind(self) -> str:
+        if self.duplicate_ids:
+            return "duplicate_ids"
+        if self.unknown_ids:
+            return "unknown_ids"
+        if self.missing_ids:
+            return "missing_ids"
+        return "no_checklist_outcomes"
+
+
 class BaseAgent:
 
     def __init__(
@@ -107,13 +142,31 @@ class BaseAgent:
         # section before writing). The raw transcript, if ever needed, lives in
         # the co-located <ts>-eval.log.
         self.result_path = self.output_dir / "result.md"
+        self.raw_result_path = self.output_dir / "raw_result.md"
+        self.result_failure_path = self.output_dir / "result_failure.json"
         self.session_meta_path = self.output_dir / "session_meta.json"
 
+    @staticmethod
+    def _is_test_result_heading(line: str) -> bool:
+        """Return whether *line* is a Markdown heading beginning "Test Result"."""
+        stripped = line.strip()
+        return (
+            stripped.startswith("#")
+            and stripped.lstrip("#").strip().startswith("Test Result")
+        )
+
     def _extract_test_result_section(self, content: str) -> str:
+        """Compatibility extractor for callers that still rely on a title.
+
+        The actual defect-result path uses ``_normalise_defect_result`` below,
+        which validates checklist IDs rather than relying on a report heading.
+        Keep this helper permissive and consistent with ``_has_required_result``
+        for older callers.
+        """
         lines = content.splitlines()
         start_idx = None
         for i, line in enumerate(lines):
-            if line.strip().startswith("# Test Result"):
+            if self._is_test_result_heading(line):
                 start_idx = i
                 break
         if start_idx is None:
@@ -139,6 +192,184 @@ class BaseAgent:
 
         trimmed = "\n".join(extracted_lines[:end_idx]).strip()
         return f"{trimmed}\n" if trimmed else ""
+
+    _CHECKLIST_ITEM_RE = re.compile(
+        r"^\s*-\s*\[\s*\]\s+((?:FT|CS|IX|CT)-\d+)\s*:\s*(.+?)\s*$",
+        re.IGNORECASE,
+    )
+    _RESULT_ITEM_RE = re.compile(
+        r"^\s*-\s*\[\s*([Xx ])\s*\]\s+"
+        r"(?:\*\*)?((?:FT|CS|IX|CT)-\d+)(?:\*\*)?"
+        r"(?:\s*(?::|—|–|-)\s*|\s+)(.*\S)?\s*$",
+        re.IGNORECASE,
+    )
+    _SECTION_RE = re.compile(r"^\s*#{1,6}\s+(.+?)\s*$")
+
+    def _required_checklist_items(self) -> list[ChecklistResultItem]:
+        """Read the expected IDs, descriptions, and sections from checklist.md."""
+        if not self.checklist_path.exists():
+            return []
+
+        section = "Checklist"
+        items: list[ChecklistResultItem] = []
+        for line in self.checklist_path.read_text(encoding="utf-8").splitlines():
+            heading = self._SECTION_RE.match(line)
+            if heading and not line.lstrip().startswith("# Test Checklist"):
+                section = heading.group(1).strip()
+                continue
+            item = self._CHECKLIST_ITEM_RE.match(line)
+            if item:
+                items.append(
+                    ChecklistResultItem(
+                        item_id=item.group(1).upper(),
+                        description=item.group(2).strip(),
+                        section=section,
+                    )
+                )
+        return items
+
+    def _parse_result_report(self, content: str | None) -> ResultParseResult:
+        """Validate report outcomes and return a canonical scorer-ready result.
+
+        A report title is presentation, not data.  The data contract is one
+        checked or unchecked outcome for every ID in the generated checklist.
+        This deliberately accepts title variations and reports that start
+        directly at a section heading, while rejecting missing, duplicate, and
+        unknown IDs.
+        """
+        raw_content = content or ""
+        expected_items = self._required_checklist_items()
+        if not raw_content.strip() or not expected_items:
+            return ResultParseResult(
+                raw_content=raw_content,
+                missing_ids=[item.item_id for item in expected_items],
+            )
+
+        expected_by_id = {item.item_id: item for item in expected_items}
+        occurrences: dict[str, list[tuple[str, list[str]]]] = {}
+        unknown_ids: list[str] = []
+        lines = raw_content.splitlines()
+
+        matches: list[tuple[int, re.Match[str]]] = []
+        for index, line in enumerate(lines):
+            match = self._RESULT_ITEM_RE.match(line)
+            if match:
+                matches.append((index, match))
+
+        for match_index, (line_index, match) in enumerate(matches):
+            item_id = match.group(2).upper()
+            if item_id not in expected_by_id:
+                unknown_ids.append(item_id)
+                continue
+
+            next_line_index = (
+                matches[match_index + 1][0]
+                if match_index + 1 < len(matches)
+                else len(lines)
+            )
+            details: list[str] = []
+            for detail_line in lines[line_index + 1:next_line_index]:
+                # A report heading separates sections; it is not part of the
+                # preceding item's bug report.
+                if self._SECTION_RE.match(detail_line):
+                    break
+                if (
+                    detail_line.strip()
+                    or detail_line.startswith((" ", "\t"))
+                ):
+                    details.append(detail_line.rstrip())
+            occurrences.setdefault(item_id, []).append(
+                ("X" if match.group(1).strip().upper() == "X" else " ", details)
+            )
+
+        duplicate_ids = sorted(item_id for item_id, values in occurrences.items() if len(values) > 1)
+        missing_ids = [item.item_id for item in expected_items if item.item_id not in occurrences]
+        result = ResultParseResult(
+            raw_content=raw_content,
+            missing_ids=missing_ids,
+            duplicate_ids=duplicate_ids,
+            unknown_ids=sorted(set(unknown_ids)),
+            emitted_count=len(occurrences),
+        )
+        if missing_ids or duplicate_ids or unknown_ids:
+            return result
+
+        result.canonical_result = self._render_canonical_result(expected_items, occurrences)
+        return result
+
+    @staticmethod
+    def _render_canonical_result(
+        expected_items: list[ChecklistResultItem],
+        occurrences: dict[str, list[tuple[str, list[str]]]],
+    ) -> str:
+        """Render valid outcome data in the one format scoring expects."""
+        lines = ["# Test Result", ""]
+        current_section: str | None = None
+        for item in expected_items:
+            if item.section != current_section:
+                if current_section is not None:
+                    lines.append("")
+                lines.extend([f"## {item.section}"])
+                current_section = item.section
+
+            status, details = occurrences[item.item_id][0]
+            lines.append(f"- [{status}] {item.item_id}: {item.description}")
+            if details:
+                lines.extend(details)
+            lines.append("")
+
+        while lines and lines[-1] == "":
+            lines.pop()
+        return "\n".join(lines) + "\n"
+
+    def _normalise_defect_result(self, result_text: str | None) -> tuple[ResultParseResult, bool]:
+        """Find and normalise a complete checklist from terminal or assistant text.
+
+        Claude Code sometimes returns an empty terminal ``ResultMessage`` after
+        it has already emitted the report as an assistant text block.  Search
+        both sources and prefer the terminal result when both are valid.
+        """
+        candidates: list[tuple[str, bool]] = [(result_text or "", True)]
+        recent_blocks = getattr(self, "recent_assistant_text_blocks", {}).get(
+            "defect_detection", []
+        )
+        candidates.extend((candidate, False) for candidate in reversed(recent_blocks))
+
+        best_result: ResultParseResult | None = None
+        best_source = True
+        seen: set[str] = set()
+        for candidate, from_result_message in candidates:
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            parsed = self._parse_result_report(candidate)
+            if parsed.is_valid:
+                return parsed, from_result_message
+            if best_result is None or parsed.emitted_count > best_result.emitted_count:
+                best_result = parsed
+                best_source = from_result_message
+
+        return best_result or ResultParseResult(), best_source
+
+    def _record_invalid_result(self, parsed: ResultParseResult) -> None:
+        """Persist recoverable evidence and a machine-readable rejection reason."""
+        if parsed.raw_content.strip():
+            self.raw_result_path.write_text(parsed.raw_content.rstrip() + "\n", encoding="utf-8")
+        self.result_failure_path.write_text(
+            json.dumps(
+                {
+                    "failure_kind": "incomplete_result",
+                    "reason": parsed.failure_kind,
+                    "missing_ids": parsed.missing_ids or [],
+                    "duplicate_ids": parsed.duplicate_ids or [],
+                    "unknown_ids": parsed.unknown_ids or [],
+                    "emitted_count": parsed.emitted_count,
+                },
+                ensure_ascii=False,
+                indent=2,
+            ) + "\n",
+            encoding="utf-8",
+        )
 
     # ------------------------------------------------------------------ #
     # Server Deployment
@@ -411,15 +642,11 @@ class BaseAgent:
         return False
     
     def _has_required_result(self, content: str | None) -> bool:
-        if content:
-        #     for line in content.splitlines():
-        #         if line.strip().startswith("# Test Result"):
-        #             return True
-        # return False
-            for line in content.splitlines():
-                s = line.strip()
-                if s.startswith("#") and s.lstrip("#").strip().startswith("Test Result"):
-                    return True
-        return False
+        # Keep a lightweight, title-compatible predicate for legacy callers.
+        # The current Gold defect-detection path uses _normalise_defect_result,
+        # which validates the actual checklist IDs instead.
+        return bool(content) and any(
+            self._is_test_result_heading(line) for line in content.splitlines()
+        )
     
     

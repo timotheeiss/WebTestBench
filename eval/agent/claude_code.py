@@ -158,12 +158,22 @@ class ClaudeCodeWebTester(BaseAgent):
         if num_turns > self.max_turns:
             self.write_markdown(target_file, "")
         else:
-            final_result, from_result_message = self._extract_final_result(result_message, stage=stage)
+            parsed_result, from_result_message = self._normalise_defect_result(result_message)
             self._record_final_result_source(stage, from_result_message)
-            self.write_markdown(target_file, final_result)
-            if final_result == "":
-                self._mark_stage(stage=stage, status="error", message=f"Stage {stage} produced invalid result content; missing '# Test Result'.",)
+            if not parsed_result.is_valid:
+                self._record_invalid_result(parsed_result)
+                missing = ", ".join(parsed_result.missing_ids or [])
+                detail = f"; missing IDs: {missing}" if missing else ""
+                self._mark_stage(
+                    stage=stage,
+                    status="error",
+                    message=(
+                        f"Stage {stage} produced incomplete result content "
+                        f"({parsed_result.failure_kind}){detail}."
+                    ),
+                )
                 return False
+            self.write_markdown(target_file, parsed_result.canonical_result)
 
         if self._verify_output_file(target_file):
             self._emit_file_event(stage, target_file)
