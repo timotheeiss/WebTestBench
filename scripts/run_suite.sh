@@ -25,7 +25,24 @@ set -uo pipefail
 # ======================================================================
 # Config (override any of these from the environment)
 # ======================================================================
+# Preserve explicit shell environment values before loading .env. Sourcing a
+# shell file normally overwrites them, which made e.g. MODEL=claude-sonnet-5
+# bash scripts/run_suite.sh silently use the model from .env instead.
+MODEL_WAS_SET=0
+if [ "${MODEL+x}" = x ]; then
+  MODEL_WAS_SET=1
+  EXPLICIT_MODEL=$MODEL
+fi
+SUBSCRIPTION_MODEL_WAS_SET=0
+if [ "${SUBSCRIPTION_MODEL+x}" = x ]; then
+  SUBSCRIPTION_MODEL_WAS_SET=1
+  EXPLICIT_SUBSCRIPTION_MODEL=$SUBSCRIPTION_MODEL
+fi
+
 [ -f .env ] && set -a && . ./.env && set +a
+
+[ "$MODEL_WAS_SET" -eq 1 ] && MODEL=$EXPLICIT_MODEL
+[ "$SUBSCRIPTION_MODEL_WAS_SET" -eq 1 ] && SUBSCRIPTION_MODEL=$EXPLICIT_SUBSCRIPTION_MODEL
 
 # AUTH_MODE=api          -> route the agent at API_BASE_URL with API_KEY (OpenRouter).
 # AUTH_MODE=subscription -> use the Claude Code login on this machine (`claude /login`).
@@ -46,11 +63,14 @@ case "$AUTH_MODE" in
     MODEL=${MODEL:-anthropic/claude-sonnet-4-6}     # same model for both conditions
     ;;
   subscription)
-    # Ignore any OpenRouter values from .env: MODEL there is a gateway slug
-    # (e.g. anthropic/claude-haiku-4.5) that won't resolve against the subscription.
+    # .env's MODEL may be an OpenRouter gateway slug (e.g.
+    # anthropic/claude-haiku-4.5), so use it here only when it was explicitly
+    # supplied on the command line. Command-line MODEL= always wins.
     API_BASE_URL=""
     API_KEY=""
-    MODEL=${SUBSCRIPTION_MODEL:-claude-sonnet-4-5}
+    if [ "$MODEL_WAS_SET" -ne 1 ]; then
+      MODEL=${SUBSCRIPTION_MODEL:-claude-sonnet-4-5}
+    fi
     # These would be inherited by the spawned CLI and re-route it at the gateway.
     unset ANTHROPIC_BASE_URL ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY
     ;;

@@ -96,6 +96,10 @@ under `eval/agent/` so the baseline and hints conditions stay aligned.
 > ```bash
 > AUTH_MODE=subscription bash scripts/run_suite.sh   # dev/debug; model defaults to claude-sonnet-4-5
 > AUTH_MODE=api          bash scripts/run_suite.sh   # measured runs
+>
+> # Explicit command values take priority over .env. For subscription mode,
+> # use a native Claude model ID (not an OpenRouter `anthropic/...` slug).
+> AUTH_MODE=subscription MODEL=claude-sonnet-5 bash scripts/run_suite.sh
 > ```
 >
 > **Use `api` for measured runs.** A subscription enforces rate limits the API path
