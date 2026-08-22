@@ -441,9 +441,7 @@ class BaseAgent:
         
         # step 3: wait for server to respond
         print("⏳ Waiting for server to start...")
-        time.sleep(20)
         for _ in range(60):  # 60 sec
-            time.sleep(1)
             try:
                 response = subprocess.run(
                     ["curl", "-s", self.server_url],
@@ -454,7 +452,8 @@ class BaseAgent:
                     self._mark_stage(stage=stage, message=f"✅ Dev server started (PID: {self.dev_server_process.pid})")
                     return True
             except:
-                continue
+                pass
+            time.sleep(1)
         
         raise RuntimeError(f"Dev server failed to start within 60s. See log: {log_path}")
 
