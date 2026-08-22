@@ -18,6 +18,11 @@ from tools import (
     experiment_tool_permissions,
     playwright_tools,
 )
+from result_store import (
+    STRUCTURED_RESULTS_SERVER,
+    STRUCTURED_RESULT_TOOLS,
+    StructuredResultStore,
+)
 from utils import *
 
 
@@ -72,6 +77,10 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
         )
 
         self.result_path = self.output_dir / "result.md"
+        self.structured_result_store = StructuredResultStore(
+            self.checklist_path,
+            self.output_dir / "result_events.jsonl",
+        )
         self.message_class_counts: Dict[str, Dict[str, Any]] = {}
         self.session_success = True
         self.recent_assistant_text_blocks: Dict[str, List[str]] = {}
@@ -83,9 +92,6 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
         # (keeps the A/B comparison fair). The prompt's stated budget is kept in
         # sync by substituting this value into the prompt below.
         self.defect_max_turns = int(os.environ.get("DEFECT_MAX_TURNS", "200"))
-        # Runaway guard: a normal run reports ~defect_max_turns; treat anything
-        # well beyond that as a malfunction and discard the result.
-        self.max_turns = self.defect_max_turns + 50
         # Prompt used for the defect-detection stage. Subclasses (e.g. the
         # hints-enabled tester) override this to swap in a different prompt.
         self.defect_prompt_key = (
@@ -215,7 +221,13 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
             instruction=self.instruction, server_url=self.server_url, checklist=checklist_md,
             max_turns=self.defect_max_turns,
         )
-        options = self._get_browser_agent_options(max_turns=self.defect_max_turns)
+        # Result recording calls are required bookkeeping, not browser-testing
+        # operations. Allocate one call per checklist item plus a final progress
+        # check without consuming the advertised browser-action budget.
+        result_tool_headroom = len(self._required_checklist_items()) + 2
+        options = self._get_browser_agent_options(
+            max_turns=self.defect_max_turns + result_tool_headroom
+        )
         # Capture the claude CLI's stderr so a non-zero exit yields a real reason
         # instead of the SDK's opaque "Check stderr output for details".
         self._defect_stderr_lines = []
@@ -243,7 +255,11 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
             # away work we already received: log the real error, then fall through
             # to salvage whatever result / recent assistant text we captured.
             self._report_query_failure(stage=stage, exc=exc)
-            if not result_message and not self.recent_assistant_text_blocks.get(stage):
+            if (
+                not result_message
+                and not self.recent_assistant_text_blocks.get(stage)
+                and not self.structured_result_store.progress()["recorded_count"]
+            ):
                 self._mark_stage(
                     stage=stage, status="error",
                     message=f"Stage {stage} failed before producing any result: {exc}",
@@ -251,28 +267,40 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
                 return False
             print_orange(f"↩️ Salvaging result captured before the failure (num_turns={num_turns}).")
 
-        if num_turns > self.max_turns:
-            self.write_markdown(target_file, "")
+        structured_report = self.structured_result_store.render_markdown()
+        structured_result = self._parse_result_report(structured_report)
+        parsed_result, from_result_message = self._normalise_defect_result(result_message)
+
+        # A complete structured store is authoritative. If neither source is
+        # complete, preserve whichever captured more checklist items.
+        if structured_result.is_valid:
+            parsed_result = structured_result
+            result_source = "structured_result_tool"
         else:
-            parsed_result, from_result_message = self._normalise_defect_result(result_message)
-            self._record_final_result_source(stage, from_result_message)
-            if not parsed_result.is_valid:
-                # Do not create result.md for an incomplete result: retries
-                # should still be possible.  Preserve the raw report and a
-                # machine-readable explanation for diagnosis instead.
-                self._record_invalid_result(parsed_result)
-                missing = ", ".join(parsed_result.missing_ids or [])
-                detail = f"; missing IDs: {missing}" if missing else ""
-                self._mark_stage(
-                    stage=stage,
-                    status="error",
-                    message=(
-                        f"Stage {stage} produced incomplete result content "
-                        f"({parsed_result.failure_kind}){detail}."
-                    ),
-                )
-                return False
-            self.write_markdown(target_file, parsed_result.canonical_result)
+            result_source = (
+                "result_message" if from_result_message else "assistant_text"
+            )
+            if structured_result.emitted_count > parsed_result.emitted_count:
+                parsed_result = structured_result
+                result_source = "structured_result_tool_partial"
+
+        self._record_named_result_source(stage, result_source)
+        if not parsed_result.is_valid:
+            # Do not create result.md for an incomplete result: retries should
+            # still be possible. Preserve the most complete raw representation.
+            self._record_invalid_result(parsed_result)
+            missing = ", ".join(parsed_result.missing_ids or [])
+            detail = f"; missing IDs: {missing}" if missing else ""
+            self._mark_stage(
+                stage=stage,
+                status="error",
+                message=(
+                    f"Stage {stage} produced incomplete result content "
+                    f"({parsed_result.failure_kind}){detail}."
+                ),
+            )
+            return False
+        self.write_markdown(target_file, parsed_result.canonical_result)
 
         if self._verify_output_file(target_file):
             self._emit_file_event(stage, target_file)
@@ -294,6 +322,32 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
             lines = []
             self._defect_stderr_lines = lines
         lines.append(line)
+
+    def _record_named_result_source(self, stage: str, source: str) -> None:
+        """Persist a descriptive source, including structured-tool recovery."""
+        session_meta: Dict[str, Any] = {}
+        if self.session_meta_path.exists():
+            try:
+                session_meta = json.loads(
+                    self.session_meta_path.read_text(encoding="utf-8")
+                )
+            except Exception as exc:
+                print_red(f"Failed to read session meta from {self.session_meta_path}: {exc}")
+        if not isinstance(session_meta, dict):
+            session_meta = {}
+
+        sources = session_meta.get("final_result_source_names")
+        if not isinstance(sources, dict):
+            sources = {}
+        sources[stage] = source
+        session_meta["final_result_source_names"] = sources
+        try:
+            self.session_meta_path.write_text(
+                json.dumps(session_meta, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            print_red(f"Failed to write session meta to {self.session_meta_path}: {exc}")
 
     def _report_query_failure(self, stage: str, exc: Exception) -> None:
         """Surface and persist the real reason a query subprocess failed."""
@@ -585,7 +639,7 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
             effective_buffer_size = max(max_buffer_size, SCREENSHOT_MAX_BUFFER_SIZE)
 
         allowed_tools, disallowed_tools = experiment_tool_permissions(
-            playwright_tools(self.allow_screenshots),
+            playwright_tools(self.allow_screenshots) + STRUCTURED_RESULT_TOOLS,
             allow_screenshots=self.allow_screenshots,
         )
 
@@ -596,7 +650,10 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
                     "type": "stdio",
                     "command": "npx",
                     "args": playwright_args,
-                }
+                },
+                STRUCTURED_RESULTS_SERVER: (
+                    self.structured_result_store.create_mcp_server()
+                ),
             },
             # ``tools`` controls which Claude Code built-ins exist in the
             # session; ``allowed_tools`` alone is only a permission allowlist.

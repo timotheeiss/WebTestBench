@@ -19,6 +19,7 @@ from tools import (
     experiment_tool_permissions,
     playwright_tools,
 )
+from result_store import STRUCTURED_RESULTS_SERVER, STRUCTURED_RESULT_TOOLS
 from utils import *
 
 
@@ -187,7 +188,9 @@ class ClaudeCodeWebTester_GoldHints(ClaudeCodeWebTester_Gold):
             effective_buffer_size = max(max_buffer_size, SCREENSHOT_MAX_BUFFER_SIZE)
 
         allowed_tools, disallowed_tools = experiment_tool_permissions(
-            playwright_tools(self.allow_screenshots) + SemanticHintsTools,
+            playwright_tools(self.allow_screenshots)
+            + SemanticHintsTools
+            + STRUCTURED_RESULT_TOOLS,
             allow_screenshots=self.allow_screenshots,
         )
 
@@ -210,6 +213,9 @@ class ClaudeCodeWebTester_GoldHints(ClaudeCodeWebTester_Gold):
                         "SEMANTIC_HINTS_TARGET_URL": self.server_url,
                     },
                 },
+                STRUCTURED_RESULTS_SERVER: (
+                    self.structured_result_store.create_mcp_server()
+                ),
             },
             tools=list(EXPERIMENT_BUILTIN_TOOLS),
             allowed_tools=allowed_tools,

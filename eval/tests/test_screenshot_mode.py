@@ -31,6 +31,7 @@ from tools import (
     PLAYWRIGHT_UNSAFE_CODE_TOOL,
     playwright_tools,
 )
+from result_store import STRUCTURED_RESULTS_SERVER, STRUCTURED_RESULT_TOOLS
 
 
 class ScreenshotModeTests(unittest.TestCase):
@@ -119,6 +120,21 @@ class ScreenshotModeTests(unittest.TestCase):
                 self.assertIn("navigate to the current page URL", prompt)
                 self.assertNotIn("never re-enter a URL directly or reload", prompt)
 
+    def test_prompt_requires_compaction_safe_result_recording(self):
+        active_prompt_keys = (
+            "defect_detection_based_gold",
+            "defect_detection_based_gold_with_screenshots",
+            "defect_detection_based_gold_with_hints",
+            "defect_detection_based_gold_with_hints_and_screenshots",
+        )
+        for key in active_prompt_keys:
+            with self.subTest(prompt=key):
+                prompt = USER_PROMPT[key].template
+                self.assertIn("Immediately call `record_result`", prompt)
+                self.assertIn("survives context compaction", prompt)
+                self.assertIn("call `get_result_progress`", prompt)
+                self.assertIn("Do not reconstruct or emit", prompt)
+
     def test_tool_permissions_mcp_args_and_buffer_are_conditional(self):
         cases = (ClaudeCodeWebTester_Gold, ClaudeCodeWebTester_GoldHints)
         with tempfile.TemporaryDirectory() as tmp:
@@ -135,8 +151,13 @@ class ScreenshotModeTests(unittest.TestCase):
                         expected_mcp_tools = playwright_tools(enabled)
                         if cls is ClaudeCodeWebTester_GoldHints:
                             expected_mcp_tools += SemanticHintsTools
+                        expected_mcp_tools += STRUCTURED_RESULT_TOOLS
 
                         self.assertEqual(options.tools, EXPERIMENT_BUILTIN_TOOLS)
+                        self.assertIn(
+                            STRUCTURED_RESULTS_SERVER,
+                            options.mcp_servers,
+                        )
                         self.assertEqual(
                             options.allowed_tools,
                             EXPERIMENT_BUILTIN_TOOLS + expected_mcp_tools,

@@ -18,6 +18,17 @@ the map of which code path is actually exercised.
 | `prompt/defect_detection_based_gold_with_hints.py` | hints defect-detection prompts, with hint-only and screenshot-enabled variants. |
 | `scoring_oracle.py` | Deterministic id-alignment scorer (no judge model). Driven by `scripts/score_suite.sh`. |
 | `tools.py`, `utils.py` | Shared helpers. |
+| `result_store.py` | In-process MCP tools that append and fsync each checklist verdict, expose compact progress after compaction, and render canonical `result.md`. |
+
+## Structured result artifacts
+
+During defect detection, every completed verdict is appended to
+`result_events.jsonl` in the run's output directory. The latest event for each
+checklist ID is authoritative; earlier events remain as audit history. Once all
+IDs are present, the runner renders `result.md` itself, so context compaction or
+an empty/malformed final assistant response cannot discard completed results.
+Events include a checklist fingerprint, preventing results from an obsolete
+checklist from being reused accidentally.
 
 ## Legacy (dismissed benchmark path — do not build on these)
 
