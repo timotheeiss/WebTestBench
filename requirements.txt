@@ -4,3 +4,4 @@ openpyxl
 selenium
 seaborn
 claude-agent-sdk==0.1.61
+mcp==1.28.1
