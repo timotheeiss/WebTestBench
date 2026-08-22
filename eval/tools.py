@@ -2,6 +2,32 @@
 
 PLAYWRIGHT_SCREENSHOT_TOOL = "mcp__playwright__browser_take_screenshot"
 
+# Claude Code's ``allowed_tools`` option controls permission approval; it does
+# not hide the rest of Claude Code's built-in tools.  Experimental browser
+# sessions therefore expose only ToolSearch from the built-in set (needed to
+# load deferred MCP tools) and explicitly deny tools that could access the
+# filesystem, shell, network, skills, or subagents.
+EXPERIMENT_BUILTIN_TOOLS = ["ToolSearch"]
+FORBIDDEN_EXPERIMENT_TOOLS = [
+    "Bash",
+    "Read",
+    "Write",
+    "Edit",
+    "MultiEdit",
+    "Grep",
+    "Glob",
+    "Agent",
+    "Task",
+    "Skill",
+    "TodoWrite",
+    "WebFetch",
+    "WebSearch",
+    "NotebookEdit",
+    "EnterPlanMode",
+    "ExitPlanMode",
+    "AskUserQuestion",
+]
+
 
 PlaywrightTools = [
     ## Browser navigation & window control
@@ -61,3 +87,22 @@ def playwright_tools(allow_screenshots: bool = False) -> list[str]:
     if allow_screenshots:
         return PlaywrightTools + [PLAYWRIGHT_SCREENSHOT_TOOL]
     return list(PlaywrightTools)
+
+
+def experiment_tool_permissions(
+    mcp_tools: list[str],
+    *,
+    allow_screenshots: bool = False,
+) -> tuple[list[str], list[str]]:
+    """Return explicit allow/deny lists for an experimental browser session.
+
+    ``tools=EXPERIMENT_BUILTIN_TOOLS`` is what makes the policy deny-by-default
+    for Claude Code built-ins.  These lists separately configure permissions:
+    MCP tools plus ToolSearch are pre-approved, while known out-of-protocol
+    tools are explicitly denied as defence in depth.
+    """
+    allowed = list(dict.fromkeys(EXPERIMENT_BUILTIN_TOOLS + mcp_tools))
+    denied = list(FORBIDDEN_EXPERIMENT_TOOLS)
+    if not allow_screenshots:
+        denied.append(PLAYWRIGHT_SCREENSHOT_TOOL)
+    return allowed, denied

@@ -12,7 +12,11 @@ from claude_agent_sdk import (
 
 from agent import APIConfig, BaseAgent, browser_headless
 from prompt import USER_PROMPT
-from tools import PLAYWRIGHT_SCREENSHOT_TOOL, playwright_tools
+from tools import (
+    EXPERIMENT_BUILTIN_TOOLS,
+    experiment_tool_permissions,
+    playwright_tools,
+)
 from utils import *
 
 
@@ -579,6 +583,11 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
             ])
             effective_buffer_size = max(max_buffer_size, SCREENSHOT_MAX_BUFFER_SIZE)
 
+        allowed_tools, disallowed_tools = experiment_tool_permissions(
+            playwright_tools(self.allow_screenshots),
+            allow_screenshots=self.allow_screenshots,
+        )
+
         return ClaudeAgentOptions(
             system_prompt=system_prompt,
             mcp_servers={
@@ -588,8 +597,14 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
                     "args": playwright_args,
                 }
             },
-            allowed_tools=playwright_tools(self.allow_screenshots),
-            disallowed_tools=([] if self.allow_screenshots else [PLAYWRIGHT_SCREENSHOT_TOOL]),
+            # ``tools`` controls which Claude Code built-ins exist in the
+            # session; ``allowed_tools`` alone is only a permission allowlist.
+            tools=list(EXPERIMENT_BUILTIN_TOOLS),
+            allowed_tools=allowed_tools,
+            disallowed_tools=disallowed_tools,
+            permission_mode="dontAsk",
+            setting_sources=[],
+            extra_args={"disable-slash-commands": None},
             model=self.api_config.model,
             effort=os.environ.get("EFFORT", "high"),
             max_turns=max_turns,

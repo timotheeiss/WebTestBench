@@ -16,11 +16,19 @@ from agent.claude_code_gold import (
     ClaudeCodeWebTester_Gold,
     image_safe_content,
 )
-from agent.claude_code_gold_hints import ClaudeCodeWebTester_GoldHints
+from agent.claude_code_gold_hints import (
+    SemanticHintsTools,
+    ClaudeCodeWebTester_GoldHints,
+)
 from dump_agent_view import text_of
 from prompt import USER_PROMPT
 from run_agent import parse_args
-from tools import PLAYWRIGHT_SCREENSHOT_TOOL
+from tools import (
+    EXPERIMENT_BUILTIN_TOOLS,
+    FORBIDDEN_EXPERIMENT_TOOLS,
+    PLAYWRIGHT_SCREENSHOT_TOOL,
+    playwright_tools,
+)
 
 
 class ScreenshotModeTests(unittest.TestCase):
@@ -77,6 +85,31 @@ class ScreenshotModeTests(unittest.TestCase):
                         agent = self.make_agent(cls, output_dir, enabled)
                         options = agent._get_browser_agent_options()
                         args = options.mcp_servers["playwright"]["args"]
+
+                        expected_mcp_tools = playwright_tools(enabled)
+                        if cls is ClaudeCodeWebTester_GoldHints:
+                            expected_mcp_tools += SemanticHintsTools
+
+                        self.assertEqual(options.tools, EXPERIMENT_BUILTIN_TOOLS)
+                        self.assertEqual(
+                            options.allowed_tools,
+                            EXPERIMENT_BUILTIN_TOOLS + expected_mcp_tools,
+                        )
+                        self.assertTrue(
+                            set(FORBIDDEN_EXPERIMENT_TOOLS).issubset(
+                                options.disallowed_tools
+                            )
+                        )
+                        self.assertFalse(
+                            set(FORBIDDEN_EXPERIMENT_TOOLS)
+                            & set(options.allowed_tools)
+                        )
+                        self.assertEqual(options.permission_mode, "dontAsk")
+                        self.assertEqual(options.setting_sources, [])
+                        self.assertEqual(
+                            options.extra_args,
+                            {"disable-slash-commands": None},
+                        )
 
                         self.assertEqual(
                             PLAYWRIGHT_SCREENSHOT_TOOL in options.allowed_tools,
