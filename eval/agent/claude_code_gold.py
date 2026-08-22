@@ -14,6 +14,7 @@ from agent import APIConfig, BaseAgent, browser_headless
 from prompt import USER_PROMPT
 from tools import (
     EXPERIMENT_BUILTIN_TOOLS,
+    PLAYWRIGHT_MCP_PACKAGE,
     experiment_tool_permissions,
     playwright_tools,
 )
@@ -557,7 +558,7 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
         max_buffer_size: int = 1024*1024,
     ) -> ClaudeAgentOptions:
         playwright_args = [
-            "-y", "@playwright/mcp@0.0.76",
+            "-y", PLAYWRIGHT_MCP_PACKAGE,
             "--isolated",
             # Use Playwright's bundled Chromium (already installed via
             # `npx playwright install chromium`). Without this, the MCP

@@ -15,6 +15,7 @@ from agent.claude_code_gold import (
 )
 from tools import (
     EXPERIMENT_BUILTIN_TOOLS,
+    PLAYWRIGHT_MCP_PACKAGE,
     experiment_tool_permissions,
     playwright_tools,
 )
@@ -171,7 +172,7 @@ class ClaudeCodeWebTester_GoldHints(ClaudeCodeWebTester_Gold):
         max_buffer_size: int = 1024 * 1024,
     ) -> ClaudeAgentOptions:
         playwright_args = [
-            "-y", "@playwright/mcp@0.0.76",
+            "-y", PLAYWRIGHT_MCP_PACKAGE,
             "--cdp-endpoint", self._cdp_endpoint,
             "--viewport-size", "1280,720",
         ]

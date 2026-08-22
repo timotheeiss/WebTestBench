@@ -26,12 +26,38 @@ from run_agent import parse_args
 from tools import (
     EXPERIMENT_BUILTIN_TOOLS,
     FORBIDDEN_EXPERIMENT_TOOLS,
+    PLAYWRIGHT_MCP_PACKAGE,
     PLAYWRIGHT_SCREENSHOT_TOOL,
+    PLAYWRIGHT_UNSAFE_CODE_TOOL,
     playwright_tools,
 )
 
 
 class ScreenshotModeTests(unittest.TestCase):
+    SAFE_PLAYWRIGHT_0_0_76_TOOLS = {
+        "mcp__playwright__browser_click",
+        "mcp__playwright__browser_close",
+        "mcp__playwright__browser_console_messages",
+        "mcp__playwright__browser_drag",
+        "mcp__playwright__browser_drop",
+        "mcp__playwright__browser_evaluate",
+        "mcp__playwright__browser_file_upload",
+        "mcp__playwright__browser_fill_form",
+        "mcp__playwright__browser_handle_dialog",
+        "mcp__playwright__browser_hover",
+        "mcp__playwright__browser_navigate",
+        "mcp__playwright__browser_navigate_back",
+        "mcp__playwright__browser_network_request",
+        "mcp__playwright__browser_network_requests",
+        "mcp__playwright__browser_press_key",
+        "mcp__playwright__browser_resize",
+        "mcp__playwright__browser_select_option",
+        "mcp__playwright__browser_snapshot",
+        "mcp__playwright__browser_tabs",
+        "mcp__playwright__browser_type",
+        "mcp__playwright__browser_wait_for",
+    }
+
     def make_agent(self, cls, output_dir: Path, enabled: bool):
         return cls(
             instruction="Test the page",
@@ -86,6 +112,8 @@ class ScreenshotModeTests(unittest.TestCase):
                         options = agent._get_browser_agent_options()
                         args = options.mcp_servers["playwright"]["args"]
 
+                        self.assertEqual(args[:2], ["-y", PLAYWRIGHT_MCP_PACKAGE])
+
                         expected_mcp_tools = playwright_tools(enabled)
                         if cls is ClaudeCodeWebTester_GoldHints:
                             expected_mcp_tools += SemanticHintsTools
@@ -103,6 +131,10 @@ class ScreenshotModeTests(unittest.TestCase):
                         self.assertFalse(
                             set(FORBIDDEN_EXPERIMENT_TOOLS)
                             & set(options.allowed_tools)
+                        )
+                        self.assertIn(
+                            PLAYWRIGHT_UNSAFE_CODE_TOOL,
+                            options.disallowed_tools,
                         )
                         self.assertEqual(options.permission_mode, "dontAsk")
                         self.assertEqual(options.setting_sources, [])
@@ -127,6 +159,18 @@ class ScreenshotModeTests(unittest.TestCase):
                         )
                         if enabled:
                             self.assertTrue((output_dir / "playwright").is_dir())
+
+    def test_playwright_allowlist_matches_pinned_safe_schema(self):
+        self.assertEqual(PLAYWRIGHT_MCP_PACKAGE, "@playwright/mcp@0.0.76")
+        self.assertSetEqual(
+            set(playwright_tools(False)),
+            self.SAFE_PLAYWRIGHT_0_0_76_TOOLS,
+        )
+        self.assertNotIn(PLAYWRIGHT_UNSAFE_CODE_TOOL, playwright_tools(True))
+        self.assertEqual(
+            set(playwright_tools(True)) - self.SAFE_PLAYWRIGHT_0_0_76_TOOLS,
+            {PLAYWRIGHT_SCREENSHOT_TOOL},
+        )
 
     def test_cli_defaults_disabled_and_accepts_enabled(self):
         required = [
