@@ -22,6 +22,42 @@
 # Run from the WebTestBench directory:  bash scripts/run_suite.sh
 set -uo pipefail
 
+usage() {
+  cat <<'EOF'
+Usage: bash scripts/run_suite.sh [--base-port PORT]
+
+Options:
+  --base-port PORT  Base port for app servers. An app WebTestBench_00XX uses
+                    PORT + XX. The flag overrides the BASE_PORT environment
+                    variable, which defaults to 6000.
+  -h, --help        Show this help message.
+EOF
+}
+
+CLI_BASE_PORT=""
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --base-port)
+      [ "$#" -ge 2 ] || { echo "❌ --base-port requires a value"; exit 2; }
+      CLI_BASE_PORT=$2
+      shift 2
+      ;;
+    --base-port=*)
+      CLI_BASE_PORT=${1#*=}
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "❌ Unknown argument: $1"
+      usage
+      exit 2
+      ;;
+  esac
+done
+
 # ======================================================================
 # Config (override any of these from the environment)
 # ======================================================================
@@ -38,11 +74,18 @@ if [ "${SUBSCRIPTION_MODEL+x}" = x ]; then
   SUBSCRIPTION_MODEL_WAS_SET=1
   EXPLICIT_SUBSCRIPTION_MODEL=$SUBSCRIPTION_MODEL
 fi
+BASE_PORT_WAS_SET=0
+if [ "${BASE_PORT+x}" = x ]; then
+  BASE_PORT_WAS_SET=1
+  EXPLICIT_BASE_PORT=$BASE_PORT
+fi
 
 [ -f .env ] && set -a && . ./.env && set +a
 
 [ "$MODEL_WAS_SET" -eq 1 ] && MODEL=$EXPLICIT_MODEL
 [ "$SUBSCRIPTION_MODEL_WAS_SET" -eq 1 ] && SUBSCRIPTION_MODEL=$EXPLICIT_SUBSCRIPTION_MODEL
+[ "$BASE_PORT_WAS_SET" -eq 1 ] && BASE_PORT=$EXPLICIT_BASE_PORT
+[ -n "$CLI_BASE_PORT" ] && BASE_PORT=$CLI_BASE_PORT
 
 # AUTH_MODE=api          -> route the agent at API_BASE_URL with API_KEY (OpenRouter).
 # AUTH_MODE=subscription -> use the Claude Code login on this machine (`claude /login`).
@@ -82,6 +125,9 @@ esac
 APPS=${APPS:-"0001 0002 0003 0004 0005"}             # app numbers to test
 REPS=${REPS:-1}                                       # repetitions per condition
 BASE_PORT=${BASE_PORT:-6000}
+case "$BASE_PORT" in
+  ''|*[!0-9]*) echo "❌ BASE_PORT must be an integer (got '$BASE_PORT')"; exit 2 ;;
+esac
 
 # Which conditions to run, in order. Both is the point of the study — narrow it
 # only to top up a partial run or to debug one arm. An A/B whose halves were run
@@ -95,6 +141,18 @@ for c in $CONDITIONS; do
   esac
 done
 NCONDS=$(echo $CONDITIONS | wc -w | tr -d ' ')
+
+for app in $APPS; do
+  case "$app" in
+    ''|*[!0-9]*) echo "❌ APPS entries must be numeric (got '$app')"; exit 2 ;;
+  esac
+  app_number=$((10#$app))
+  app_port=$((BASE_PORT + app_number))
+  if [ "$app_port" -lt 1 ] || [ "$app_port" -gt 65535 ]; then
+    echo "❌ Invalid derived port for app $app: BASE_PORT $BASE_PORT + $app_number = $app_port"
+    exit 2
+  fi
+done
 
 # Screenshot access is condition-specific so the same suite can run a
 # vision-enabled baseline against a hint-only agent, or enable vision for both.
@@ -305,6 +363,7 @@ run_condition() {  # $1 name  $2 agent  $3 project_root  $4 screenshot mode
 
 NAPPS=$(echo $APPS | wc -w | tr -d ' ')
 echo "Suite plan: run-id=$RUN_ID  apps [$APPS] × $REPS reps × $NCONDS condition(s) [$CONDITIONS] = $(( NAPPS * REPS * NCONDS )) app-runs"
+echo "Server ports: base=$BASE_PORT (app port = base + numeric app ID)"
 [ "$NCONDS" -lt 2 ] && echo "⚠️  Single condition — this run alone is not an A/B comparison."
 echo "Model: $MODEL   auth: $AUTH_MODE   effort=$EFFORT   headless=$BROWSER_HEADLESS   turn budget: $DEFECT_MAX_TURNS"
 echo "Screenshots: baseline=$BASELINE_SCREENSHOTS   hints=$HINTS_SCREENSHOTS"

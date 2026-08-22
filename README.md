@@ -102,6 +102,14 @@ under `eval/agent/` so the baseline and hints conditions stay aligned.
 > AUTH_MODE=subscription MODEL=claude-sonnet-5 bash scripts/run_suite.sh
 > ```
 >
+> Parallel workers that may test the same app simultaneously must use separate
+> server-port ranges. The flag overrides the `BASE_PORT` environment variable:
+>
+> ```bash
+> bash scripts/run_suite.sh --base-port 6000   # worker 1: app 0023 -> port 6023
+> bash scripts/run_suite.sh --base-port 7000   # worker 2: app 0023 -> port 7023
+> ```
+>
 > **Use `api` for measured runs.** A subscription enforces rate limits the API path
 > doesn't: hitting a cap mid-suite stalls the agent, and that lands in the latency
 > measurements. It can also bias the A/B — the baseline condition burns more tokens
