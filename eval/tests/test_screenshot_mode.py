@@ -101,6 +101,24 @@ class ScreenshotModeTests(unittest.TestCase):
                     else:
                         self.assertIn("Do NOT use screenshots", prompt)
 
+    def test_prompt_allows_checklist_required_reload(self):
+        active_prompt_keys = (
+            "defect_detection_based_gold",
+            "defect_detection_based_gold_with_screenshots",
+            "defect_detection_based_gold_with_hints",
+            "defect_detection_based_gold_with_hints_and_screenshots",
+        )
+        for key in active_prompt_keys:
+            with self.subTest(prompt=key):
+                prompt = USER_PROMPT[key].template
+                self.assertIn(
+                    "when a checklist item explicitly tests behavior",
+                    prompt,
+                )
+                self.assertIn("after a reload, refresh, revisit", prompt)
+                self.assertIn("navigate to the current page URL", prompt)
+                self.assertNotIn("never re-enter a URL directly or reload", prompt)
+
     def test_tool_permissions_mcp_args_and_buffer_are_conditional(self):
         cases = (ClaudeCodeWebTester_Gold, ClaudeCodeWebTester_GoldHints)
         with tempfile.TemporaryDirectory() as tmp:
