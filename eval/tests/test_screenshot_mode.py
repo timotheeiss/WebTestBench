@@ -131,10 +131,19 @@ class ScreenshotModeTests(unittest.TestCase):
         for key in active_prompt_keys:
             with self.subTest(prompt=key):
                 prompt = USER_PROMPT[key].template
-                self.assertIn("Immediately call `record_result`", prompt)
+                self.assertIn(
+                    "Immediately call `mcp__structured_results__record_result`",
+                    prompt,
+                )
                 self.assertIn("survives context compaction", prompt)
-                self.assertIn("call `get_result_progress`", prompt)
-                self.assertIn("Do not reconstruct or emit", prompt)
+                self.assertIn(
+                    "Call `mcp__structured_results__get_result_progress`",
+                    prompt,
+                )
+                self.assertNotIn("# Output Format", prompt)
+                self.assertNotIn("Canonical Result Rendering", prompt)
+                self.assertNotIn("result.md", prompt)
+                self.assertNotIn("# Test Result", prompt)
 
     def test_tool_permissions_mcp_args_and_buffer_are_conditional(self):
         cases = (ClaudeCodeWebTester_Gold, ClaudeCodeWebTester_GoldHints)

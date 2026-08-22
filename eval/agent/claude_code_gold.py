@@ -222,13 +222,7 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
             instruction=self.instruction, server_url=self.server_url, checklist=checklist_md,
             max_turns=self.defect_max_turns,
         )
-        # Result recording calls are required bookkeeping, not browser-testing
-        # operations. Allocate one call per checklist item plus a final progress
-        # check without consuming the advertised browser-action budget.
-        result_tool_headroom = len(self._required_checklist_items()) + 2
-        options = self._get_browser_agent_options(
-            max_turns=self.defect_max_turns + result_tool_headroom
-        )
+        options = self._get_browser_agent_options(max_turns=self.defect_max_turns)
         # Capture the claude CLI's stderr so a non-zero exit yields a real reason
         # instead of the SDK's opaque "Check stderr output for details".
         self._defect_stderr_lines = []
