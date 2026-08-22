@@ -1,6 +1,7 @@
 # https://github.com/microsoft/playwright-mcp
 
 PLAYWRIGHT_MCP_PACKAGE = "@playwright/mcp@0.0.76"
+PLAYWRIGHT_CLIPBOARD_PERMISSIONS = ["clipboard-read", "clipboard-write"]
 PLAYWRIGHT_SCREENSHOT_TOOL = "mcp__playwright__browser_take_screenshot"
 PLAYWRIGHT_UNSAFE_CODE_TOOL = "mcp__playwright__browser_run_code_unsafe"
 

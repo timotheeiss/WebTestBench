@@ -14,6 +14,7 @@ from agent import APIConfig, BaseAgent, browser_headless
 from prompt import USER_PROMPT
 from tools import (
     EXPERIMENT_BUILTIN_TOOLS,
+    PLAYWRIGHT_CLIPBOARD_PERMISSIONS,
     PLAYWRIGHT_MCP_PACKAGE,
     experiment_tool_permissions,
     playwright_tools,
@@ -622,6 +623,7 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
             # A/B comparison on the same browser.
             "--browser", "chromium",
             "--viewport-size", "1280,720",
+            "--grant-permissions", *PLAYWRIGHT_CLIPBOARD_PERMISSIONS,
         ]
         # The MCP is headed by default, so this flag is what keeps the baseline
         # arm's browser mode tied to the hints arm's. Same knob, both conditions.

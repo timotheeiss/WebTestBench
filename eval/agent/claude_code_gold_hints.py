@@ -15,6 +15,7 @@ from agent.claude_code_gold import (
 )
 from tools import (
     EXPERIMENT_BUILTIN_TOOLS,
+    PLAYWRIGHT_CLIPBOARD_PERMISSIONS,
     PLAYWRIGHT_MCP_PACKAGE,
     experiment_tool_permissions,
     playwright_tools,
@@ -176,6 +177,7 @@ class ClaudeCodeWebTester_GoldHints(ClaudeCodeWebTester_Gold):
             "-y", PLAYWRIGHT_MCP_PACKAGE,
             "--cdp-endpoint", self._cdp_endpoint,
             "--viewport-size", "1280,720",
+            "--grant-permissions", *PLAYWRIGHT_CLIPBOARD_PERMISSIONS,
         ]
         effective_buffer_size = max_buffer_size
         if self.allow_screenshots:

@@ -26,6 +26,7 @@ from run_agent import parse_args
 from tools import (
     EXPERIMENT_BUILTIN_TOOLS,
     FORBIDDEN_EXPERIMENT_TOOLS,
+    PLAYWRIGHT_CLIPBOARD_PERMISSIONS,
     PLAYWRIGHT_MCP_PACKAGE,
     PLAYWRIGHT_SCREENSHOT_TOOL,
     PLAYWRIGHT_UNSAFE_CODE_TOOL,
@@ -147,6 +148,11 @@ class ScreenshotModeTests(unittest.TestCase):
                         args = options.mcp_servers["playwright"]["args"]
 
                         self.assertEqual(args[:2], ["-y", PLAYWRIGHT_MCP_PACKAGE])
+                        grant_index = args.index("--grant-permissions")
+                        self.assertEqual(
+                            args[grant_index + 1:grant_index + 3],
+                            PLAYWRIGHT_CLIPBOARD_PERMISSIONS,
+                        )
 
                         expected_mcp_tools = playwright_tools(enabled)
                         if cls is ClaudeCodeWebTester_GoldHints:
@@ -198,6 +204,19 @@ class ScreenshotModeTests(unittest.TestCase):
                         )
                         if enabled:
                             self.assertTrue((output_dir / "playwright").is_dir())
+
+    def test_hints_shared_browser_grants_clipboard_permissions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = self.make_agent(
+                ClaudeCodeWebTester_GoldHints,
+                Path(tmp),
+                enabled=False,
+            )
+            launcher = agent.cdp_launcher.read_text(encoding="utf-8")
+            self.assertIn(
+                'context.grantPermissions(["clipboard-read", "clipboard-write"])',
+                launcher,
+            )
 
     def test_playwright_allowlist_matches_pinned_safe_schema(self):
         self.assertEqual(PLAYWRIGHT_MCP_PACKAGE, "@playwright/mcp@0.0.76")
