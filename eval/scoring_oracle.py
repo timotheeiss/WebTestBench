@@ -368,21 +368,18 @@ class ScoringPipeline_Oracle:
         pred_items: Dict[str, dict],
     ) -> List[Tuple[str, Optional[str]]]:
         """
-        Build direct alignment pairs by checklist order:
-        - zip `pred_ids` and `gold_ids` in their original appearance order
-        - treat extra predictions as unmatched (`gold_id = None`)
+        Build alignment pairs from the gold id embedded in each predicted
+        item's id.
+
+        `checklist_generation` writes checklist item ids as `{prefix}-{gold_id}`
+        (e.g. "CS-11" for gold id "11"), so the gold id can be read straight
+        back out instead of relying on the two checklists sharing the same
+        item order (which the gold checklist does not guarantee).
         """
-        gold_ids = list(gold_items.keys())
-        pred_ids = list(pred_items.keys())
-
         match_ids: List[Tuple[str, Optional[str]]] = []
-        for pred_id, gold_id in zip(pred_ids, gold_ids):
-            match_ids.append((pred_id, gold_id))
-
-        # Mark extra predictions as unmatched.
-        if len(pred_ids) > len(gold_ids):
-            for pred_id in pred_ids[len(gold_ids):]:
-                match_ids.append((pred_id, None))
+        for pred_id in pred_items:
+            gold_id = pred_id.split("-", 1)[1] if "-" in pred_id else pred_id
+            match_ids.append((pred_id, gold_id if gold_id in gold_items else None))
 
         return match_ids
 

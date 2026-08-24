@@ -174,12 +174,16 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
                 continue
             section_title, prefix = class_map[class_key]
             lines.append(f"## {section_title}")
-            for idx, item in enumerate(section_items, start=1):
+            for item in section_items:
                 content = str(item.get("content", "")).strip()
                 if not content:
                     continue
                 content = " ".join(content.splitlines()).strip()
-                lines.append(f"- [ ] {prefix}-{idx:02d}: {content}")
+                # Embed the dataset's own id (e.g. "CS-11") rather than a fresh
+                # per-class counter, so the scorer can align items directly by
+                # id instead of assuming checklist order is preserved.
+                gold_id = str(item.get("id", "")).strip()
+                lines.append(f"- [ ] {prefix}-{gold_id}: {content}")
                 lines.append("")
             if lines[-1] == "":
                 lines.pop()
