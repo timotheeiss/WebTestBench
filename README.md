@@ -216,6 +216,7 @@ selectors to address elements.
 | Script | What it does |
 | --- | --- |
 | `run_suite.sh` | A/B suite: baseline + hints over `APPS` × `REPS`, one run-id, with independently configurable screenshot access. Writes `../experiments/runs/<run-id>/` + `run_config.json`. |
+| `run_official_fable_hinted_every_5_hours.sh` | Starts the `official_fable_hinted` suite immediately at `REPS=2`, advances the cumulative rep count every five hours, and stops after `REPS=10`. |
 | `score_suite.sh <run-id>` | Score every `<condition>/rep<r>` leaf of a run with the oracle scorer (`eval/scoring_oracle.py`). |
 | `dump_suite.sh <run-id> [--full]` | Re-dump `agent_view.txt` for every app-rep of a run (e.g. with `--full`, or for archived runs). Note: `run_suite.sh` already dumps it automatically per app — this is for re-generating. |
 | `dump_agent_view.py` | Replay ONE run's SDK session transcript to dump exactly what the agent saw (accessibility tree / hints) and did (tool calls). Auto-writes `agent_view.txt` next to that run's `session_meta.json`; `--stdout` / `--out` / `--full` to override. |
