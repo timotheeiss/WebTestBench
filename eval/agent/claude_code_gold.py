@@ -109,6 +109,12 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
         if self._should_skip_stage(self.result_path, stage="eval"):
             return True
 
+        # A missing result.md means the previous attempt did not complete. Its
+        # partial verdicts must not constrain the next agent invocation. Doing
+        # this at startup also covers hard-killed processes that could not run
+        # their finally block.
+        self._delete_incomplete_result_events("before retry")
+
         self._log_instruction()
 
         start_ts = time.time()
@@ -128,7 +134,13 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
         finally:
             end_ts = time.time()
             duration = end_ts - start_ts
-            self.kill_local_server()
+            try:
+                self.kill_local_server()
+            finally:
+                # Preserve the audit trail for completed runs, but discard
+                # partial progress after failures, exceptions, or interrupts.
+                if not self.result_path.exists():
+                    self._delete_incomplete_result_events("after incomplete run")
 
         completion_message = "✅ Web Testing completed." if success else "❌ Web Testing encountered errors."
         (print_green if success else print_red)(completion_message)
@@ -141,6 +153,13 @@ class ClaudeCodeWebTester_Gold(BaseAgent):
             )
         )
         return success
+
+    def _delete_incomplete_result_events(self, reason: str) -> None:
+        if self.structured_result_store.delete_events():
+            print_orange(
+                f"Deleted incomplete structured results ({reason}): "
+                f"{self.structured_result_store.events_path}"
+            )
 
     async def checklist_generation(self) -> bool:
         stage = "checklist_generation"

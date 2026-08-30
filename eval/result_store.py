@@ -47,6 +47,19 @@ class StructuredResultStore:
         self.events_path = Path(events_path)
         self._lock = threading.Lock()
 
+    def delete_events(self) -> bool:
+        """Delete persisted verdicts so the next attempt starts from scratch.
+
+        Returns ``True`` when an event file existed and was removed. Missing
+        files are treated as an already-clean store.
+        """
+        with self._lock:
+            try:
+                self.events_path.unlink()
+            except FileNotFoundError:
+                return False
+        return True
+
     def checklist_items(self) -> list[ChecklistItem]:
         if not self.checklist_path.exists():
             return []
